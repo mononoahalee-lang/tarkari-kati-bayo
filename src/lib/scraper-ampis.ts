@@ -1,123 +1,114 @@
 import * as cheerio from 'cheerio'
 import { prisma } from './prisma'
 
-const AMPIS_URL = 'https://ampis.gov.np/'
-
-// Known AMPIS markets — extended as discovered
+// AMPIS market IDs from the dropdown (uid_entityreference_filter)
 const AMPIS_MARKETS = [
-  { nameEn: 'Birtamod', nameNe: 'बिर्तामोड', district: 'Jhapa' },
-  { nameEn: 'Dharan', nameNe: 'धरान', district: 'Sunsari' },
-  { nameEn: 'Dhalkewar', nameNe: 'धलकेवर', district: 'Sarlahi' },
-  { nameEn: 'Kamalmai', nameNe: 'कमलमाई', district: 'Sindhuli' },
-  { nameEn: 'Kawasoti', nameNe: 'कावासोती', district: 'Nawalpur' },
-  { nameEn: 'Pokhara', nameNe: 'पोखरा', district: 'Kaski' },
-  { nameEn: 'Butwal', nameNe: 'बुटवल', district: 'Rupandehi' },
-  { nameEn: 'Kohalpur', nameNe: 'कोहलपुर', district: 'Banke' },
-  { nameEn: 'Birendranagar', nameNe: 'विरेन्द्रनगर', district: 'Surkhet' },
-  { nameEn: 'Attaria', nameNe: 'अत्तरिया', district: 'Kailali' },
-  { nameEn: 'Lalband', nameNe: 'लालबन्दी', district: 'Sarlahi' },
+  { id: 5,  nameEn: 'Birtamod',      nameNe: 'बिर्तामोड',     district: 'Jhapa' },
+  { id: 6,  nameEn: 'Dharan',        nameNe: 'धरान',           district: 'Sunsari' },
+  { id: 7,  nameEn: 'Dhalkewar',     nameNe: 'ढल्केवर',        district: 'Dhanusha' },
+  { id: 8,  nameEn: 'Kamalmai',      nameNe: 'कमलामाई',        district: 'Sindhuli' },
+  { id: 9,  nameEn: 'Kawasoti',      nameNe: 'कावासोती',       district: 'Nawalpur' },
+  { id: 10, nameEn: 'Pokhara',       nameNe: 'पोखरा',          district: 'Kaski' },
+  { id: 11, nameEn: 'Butwal',        nameNe: 'बुटवल',          district: 'Rupandehi' },
+  { id: 12, nameEn: 'Kohalpur',      nameNe: 'कोहलपुर',        district: 'Banke' },
+  { id: 13, nameEn: 'Birendranagar', nameNe: 'बिरेन्द्रनगर',   district: 'Surkhet' },
+  { id: 14, nameEn: 'Attaria',       nameNe: 'अत्तरिया',       district: 'Kailali' },
+  { id: 15, nameEn: 'Lalbandi',      nameNe: 'लालबन्दी',       district: 'Sarlahi' },
 ]
 
-export async function scrapeAmpis(): Promise<number> {
-  // Fetch main page to get form tokens and current prices
-  const res = await fetch(AMPIS_URL, {
+const BASE_URL = 'https://ampis.gov.np/market-price-comparison'
+
+async function fetchMarketPrices(marketId: number): Promise<Array<{
+  nameNe: string; unit: string; min: number; max: number
+}>> {
+  const url = `${BASE_URL}?uid_entityreference_filter=${marketId}&field_commodity_category_target_id_entityreference_filter=2`
+  const res = await fetch(url, {
     headers: { 'User-Agent': 'Mozilla/5.0 (compatible; TarkariBot/1.0)' },
     next: { revalidate: 0 },
   })
-  if (!res.ok) throw new Error(`AMPIS fetch failed: ${res.status}`)
+  if (!res.ok) return []
+
   const html = await res.text()
   const $ = cheerio.load(html)
+  const rows: Array<{ nameNe: string; unit: string; min: number; max: number }> = []
 
+  $('table tbody tr').each((_, tr) => {
+    const tds = $(tr).find('td')
+    if (tds.length < 4) return
+    const nameNe = $(tds[0]).text().trim()
+    const unit = $(tds[1]).text().trim() || 'kg'
+    const min = parseFloat($(tds[2]).text().replace(/,/g, '').trim())
+    const max = parseFloat($(tds[3]).text().replace(/,/g, '').trim())
+    if (!nameNe || isNaN(min) || isNaN(max)) return
+    rows.push({ nameNe, unit, min, max })
+  })
+
+  return rows
+}
+
+export async function scrapeAmpis(): Promise<number> {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
   let saved = 0
 
-  // Parse price table on main page (shows latest prices per market)
-  // AMPIS shows a combined table — each row may include market name
-  const tableRows: Array<{
-    marketName: string
-    nameNe: string
-    unit: string
-    min: number
-    max: number
-    avg: number
-  }> = []
-
-  // Try to find table with price data
-  $('table tbody tr').each((_, tr) => {
-    const tds = $(tr).find('td')
-    if (tds.length < 5) return
-
-    // AMPIS table structure can vary; try common patterns
-    let offset = 0
-    let marketName = ''
-
-    if (tds.length >= 6) {
-      // Market name may be in first column
-      marketName = $(tds[0]).text().trim()
-      offset = 1
-    }
-
-    const nameNe = $(tds[offset]).text().trim()
-    const unit = $(tds[offset + 1]).text().trim() || 'kg'
-    const min = parseFloat($(tds[offset + 2]).text().replace(/,/g, '').trim())
-    const max = parseFloat($(tds[offset + 3]).text().replace(/,/g, '').trim())
-    const avg = parseFloat($(tds[offset + 4]).text().replace(/,/g, '').trim())
-
-    if (!nameNe || isNaN(min) || isNaN(max) || isNaN(avg)) return
-    tableRows.push({ marketName: marketName || 'AMPIS', nameNe, unit, min, max, avg })
-  })
-
-  // Upsert markets and records
-  const marketCache = new Map<string, string>()
-
-  for (const row of tableRows) {
-    const knownMarket = AMPIS_MARKETS.find(
-      (m) => row.marketName.includes(m.nameNe) || row.marketName.includes(m.nameEn)
-    ) ?? { nameEn: row.marketName || 'AMPIS', nameNe: row.marketName || 'AMPIS', district: 'Nepal' }
-
-    let marketId = marketCache.get(knownMarket.nameEn)
-    if (!marketId) {
+  for (const marketDef of AMPIS_MARKETS) {
+    let marketId: string
+    try {
       const market = await prisma.market.upsert({
-        where: { nameEn: knownMarket.nameEn },
+        where: { nameEn: marketDef.nameEn },
         update: {},
-        create: { ...knownMarket, source: 'ampis' },
+        create: {
+          nameEn: marketDef.nameEn,
+          nameNe: marketDef.nameNe,
+          district: marketDef.district,
+          source: 'ampis',
+        },
       })
       marketId = market.id
-      marketCache.set(knownMarket.nameEn, marketId)
+    } catch {
+      continue
     }
 
-    const vegetable = await prisma.vegetable.upsert({
-      where: { nameNe: row.nameNe },
-      update: {},
-      create: {
-        nameNe: row.nameNe,
-        nameEn: row.nameNe,
-        nameJa: row.nameNe,
-        unit: row.unit,
-      },
-    })
+    const rows = await fetchMarketPrices(marketDef.id)
 
-    await prisma.priceRecord.upsert({
-      where: {
-        vegetableId_marketId_date: {
+    for (const row of rows) {
+      const avg = (row.min + row.max) / 2
+
+      const vegetable = await prisma.vegetable.upsert({
+        where: { nameNe: row.nameNe },
+        update: {},
+        create: {
+          nameNe: row.nameNe,
+          nameEn: row.nameNe,
+          nameJa: row.nameNe,
+          unit: row.unit,
+        },
+      })
+
+      await prisma.priceRecord.upsert({
+        where: {
+          vegetableId_marketId_date: {
+            vegetableId: vegetable.id,
+            marketId,
+            date: today,
+          },
+        },
+        update: { minPrice: row.min, maxPrice: row.max, avgPrice: avg },
+        create: {
           vegetableId: vegetable.id,
           marketId,
           date: today,
+          minPrice: row.min,
+          maxPrice: row.max,
+          avgPrice: avg,
         },
-      },
-      update: { minPrice: row.min, maxPrice: row.max, avgPrice: row.avg },
-      create: {
-        vegetableId: vegetable.id,
-        marketId,
-        date: today,
-        minPrice: row.min,
-        maxPrice: row.max,
-        avgPrice: row.avg,
-      },
-    })
-    saved++
+      })
+      saved++
+    }
+
+    // Small delay to be polite to the server
+    await new Promise((r) => setTimeout(r, 500))
   }
 
   return saved
