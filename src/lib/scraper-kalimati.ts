@@ -36,14 +36,24 @@ export async function scrapeKalimati(): Promise<number> {
     avg: number
   }> = []
 
+  // Convert Nepali/Devanagari digits to Arabic digits and strip currency prefix
+  function parseNepaliPrice(text: string): number {
+    const cleaned = text
+      .replace(/रू\s*/g, '')
+      .replace(/[०१२३४५६७८९]/g, (d) => String('०१२३४५६७८९'.indexOf(d)))
+      .replace(/,/g, '')
+      .trim()
+    return parseFloat(cleaned)
+  }
+
   $('table tbody tr').each((_, tr) => {
     const tds = $(tr).find('td')
     if (tds.length < 5) return
     const nameNe = $(tds[0]).text().trim()
     const unit = $(tds[1]).text().trim() || 'kg'
-    const min = parseFloat($(tds[2]).text().replace(/,/g, '').trim())
-    const max = parseFloat($(tds[3]).text().replace(/,/g, '').trim())
-    const avg = parseFloat($(tds[4]).text().replace(/,/g, '').trim())
+    const min = parseNepaliPrice($(tds[2]).text())
+    const max = parseNepaliPrice($(tds[3]).text())
+    const avg = parseNepaliPrice($(tds[4]).text())
     if (!nameNe || isNaN(min) || isNaN(max) || isNaN(avg)) return
     rows.push({ nameNe, unit, min, max, avg })
   })
