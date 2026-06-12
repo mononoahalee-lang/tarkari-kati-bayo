@@ -1,0 +1,48 @@
+{
+  "nav": {
+    "home": "ホーム",
+    "markets": "市場",
+    "news": "ニュース"
+  },
+  "home": {
+    "title": "タルカリ カティ バヨ",
+    "subtitle": "ネパール野菜市場の価格情報 — 株式市場のように",
+    "topGainers": "値上がり上位",
+    "topLosers": "値下がり上位",
+    "allVegetables": "全品目",
+    "searchPlaceholder": "野菜を検索...",
+    "updated": "更新",
+    "noData": "データがありません"
+  },
+  "detail": {
+    "priceHistory": "価格履歴",
+    "marketComparison": "市場別比較",
+    "aiComment": "AI分析",
+    "pricePrediction": "価格予測",
+    "highSeason": "ハイシーズン",
+    "highSeasonDesc": "過去データから、この月は価格が高騰しやすい時期です",
+    "stats": {
+      "high52w": "52週高値",
+      "low52w": "52週安値",
+      "avgPrice": "平均価格",
+      "volume": "供給量"
+    },
+    "periods": {
+      "1W": "1週",
+      "1M": "1ヶ月",
+      "3M": "3ヶ月",
+      "1Y": "1年"
+    }
+  },
+  "news": {
+    "title": "市場ニュース",
+    "noNews": "ニュースがありません"
+  },
+  "price": {
+    "unit": "/",
+    "min": "最安値",
+    "max": "最高値",
+    "avg": "平均",
+    "change": "前日比"
+  }
+}

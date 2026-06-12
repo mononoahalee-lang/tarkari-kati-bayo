@@ -1,0 +1,58 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Market {
+  id       String        @id @default(cuid())
+  nameNe   String
+  nameEn   String
+  district String
+  source   String        // "kalimati" | "ampis"
+  prices   PriceRecord[]
+
+  @@unique([nameEn])
+}
+
+model Vegetable {
+  id       String        @id @default(cuid())
+  nameNe   String        @unique
+  nameEn   String
+  nameJa   String
+  category String        @default("vegetable")
+  unit     String        @default("kg")
+  prices   PriceRecord[]
+}
+
+model PriceRecord {
+  id          String    @id @default(cuid())
+  vegetableId String
+  marketId    String
+  date        DateTime  @db.Date
+  minPrice    Float
+  maxPrice    Float
+  avgPrice    Float
+  vegetable   Vegetable @relation(fields: [vegetableId], references: [id])
+  market      Market    @relation(fields: [marketId], references: [id])
+
+  @@unique([vegetableId, marketId, date])
+  @@index([date])
+  @@index([vegetableId])
+  @@index([marketId])
+}
+
+model NewsItem {
+  id          String   @id @default(cuid())
+  titleNe     String?
+  titleEn     String
+  titleJa     String?
+  url         String   @unique
+  source      String
+  publishedAt DateTime
+  summary     String?
+  createdAt   DateTime @default(now())
+}

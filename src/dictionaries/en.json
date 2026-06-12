@@ -1,0 +1,48 @@
+{
+  "nav": {
+    "home": "Home",
+    "markets": "Markets",
+    "news": "News"
+  },
+  "home": {
+    "title": "Tarkari Kati Bayo",
+    "subtitle": "Nepal Vegetable Market Prices — Like a Stock Exchange",
+    "topGainers": "Top Gainers",
+    "topLosers": "Top Losers",
+    "allVegetables": "All Vegetables",
+    "searchPlaceholder": "Search vegetables...",
+    "updated": "Updated",
+    "noData": "No data available"
+  },
+  "detail": {
+    "priceHistory": "Price History",
+    "marketComparison": "Market Comparison",
+    "aiComment": "AI Analysis",
+    "pricePrediction": "Price Forecast",
+    "highSeason": "High Season",
+    "highSeasonDesc": "Prices likely to be high this month based on historical data",
+    "stats": {
+      "high52w": "52-Week High",
+      "low52w": "52-Week Low",
+      "avgPrice": "Avg Price",
+      "volume": "Supply"
+    },
+    "periods": {
+      "1W": "1W",
+      "1M": "1M",
+      "3M": "3M",
+      "1Y": "1Y"
+    }
+  },
+  "news": {
+    "title": "Market News",
+    "noNews": "No news available"
+  },
+  "price": {
+    "unit": "per",
+    "min": "Min",
+    "max": "Max",
+    "avg": "Avg",
+    "change": "Change"
+  }
+}
