@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { GoogleGenAI } from '@google/genai'
+import { generateText } from '@/lib/gemini'
 import { prisma } from '@/lib/prisma'
 
 export const runtime = 'nodejs'
@@ -44,58 +44,49 @@ export async function GET(request: NextRequest) {
     if (!monthlyMap.has(month)) monthlyMap.set(month, [])
     monthlyMap.get(month)!.push(r.avgPrice)
   }
-  const validMonthlyAvgs = Array.from({ length: 12 }, (_, i) => {
-    const month = i + 1
-    const prices = monthlyMap.get(month) ?? []
+  const validAvgs = Array.from({ length: 12 }, (_, i) => {
+    const prices = monthlyMap.get(i + 1) ?? []
     return prices.length > 0 ? prices.reduce((a, b) => a + b, 0) / prices.length : null
   }).filter((v): v is number => v !== null)
-  const overallAvg = validMonthlyAvgs.length > 0
-    ? validMonthlyAvgs.reduce((a, b) => a + b, 0) / validMonthlyAvgs.length
-    : 0
+  const overallAvg = validAvgs.length > 0 ? validAvgs.reduce((a, b) => a + b, 0) / validAvgs.length : 0
 
   const recentSummary = records.slice(-10).map((r) => ({
     date: r.date.toISOString().split('T')[0],
-    market: r.market.nameEn,
     avg: r.avgPrice,
   }))
 
-  const latestPrice = records.length > 0 ? records[records.length - 1].avgPrice : null
-  const firstPrice = records.length > 0 ? records[0].avgPrice : null
-  const priceTrend = latestPrice !== null && firstPrice !== null && firstPrice > 0
-    ? (((latestPrice - firstPrice) / firstPrice) * 100).toFixed(1)
-    : null
+  const latestPrice = records.at(-1)?.avgPrice ?? null
+  const firstPrice = records.at(0)?.avgPrice ?? null
+  const priceTrend =
+    latestPrice && firstPrice && firstPrice > 0
+      ? (((latestPrice - firstPrice) / firstPrice) * 100).toFixed(1)
+      : null
 
   const prompt = `You are a Nepal vegetable market analyst. Analyze price data for "${vegetable.nameEn}" (Nepali: ${vegetable.nameNe}).
 
 Recent prices (NPR/kg): ${JSON.stringify(recentSummary)}
-30-day trend: ${priceTrend !== null ? priceTrend + '%' : 'N/A'}
+30-day trend: ${priceTrend ? priceTrend + '%' : 'N/A'}
 2-year average: ${overallAvg > 0 ? overallAvg.toFixed(2) + ' NPR/kg' : 'N/A'}
+Current price: ${latestPrice ? latestPrice + ' NPR/kg' : 'N/A'}
 
-Respond ONLY with valid JSON (no markdown, no explanation):
-{"ne":"<2句 Nepali commentary>","en":"<2句 English commentary>","ja":"<2句 Japanese commentary>","prediction":{"direction":"up|down|stable","confidence":"high|medium|low","reason":"<1 sentence>","estimatedRange":{"min":<number>,"max":<number>}}}`
+Respond ONLY with valid JSON (no markdown code blocks, no extra text):
+{"ne":"<2 sentences in Nepali about current price and outlook>","en":"<2 sentences in English about current price and outlook>","ja":"<2 sentences in Japanese about current price and outlook>","prediction":{"direction":"up","confidence":"medium","reason":"<1 sentence>","estimatedRange":{"min":0,"max":0}}}`
 
-  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.0-flash',
-    contents: prompt,
-  })
-
-  const text = response.text ?? ''
-  let parsed
   try {
+    const text = await generateText(prompt)
     const jsonMatch = text.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) throw new Error('No JSON')
-    parsed = JSON.parse(jsonMatch[0])
-  } catch {
-    return NextResponse.json({ error: 'Failed to parse AI response', raw: text }, { status: 500 })
-  }
+    if (!jsonMatch) throw new Error('No JSON in response')
+    const parsed = JSON.parse(jsonMatch[0])
 
-  return NextResponse.json({
-    vegetableId,
-    vegetableNameEn: vegetable.nameEn,
-    vegetableNameNe: vegetable.nameNe,
-    vegetableNameJa: vegetable.nameJa,
-    ...parsed,
-    updatedAt: new Date().toISOString(),
-  })
+    return NextResponse.json({
+      vegetableId,
+      vegetableNameEn: vegetable.nameEn,
+      vegetableNameNe: vegetable.nameNe,
+      vegetableNameJa: vegetable.nameJa,
+      ...parsed,
+      updatedAt: new Date().toISOString(),
+    })
+  } catch (err) {
+    return NextResponse.json({ error: String(err) }, { status: 500 })
+  }
 }
