@@ -3,7 +3,7 @@ import type { Locale } from '@/types'
 import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 
-export const revalidate = 3600
+export const dynamic = 'force-dynamic'
 
 export default async function NewsPage({ params }: { params: Promise<{ lang: string }> }) {
   const { lang } = await params

@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import Link from 'next/link'
 
-export const revalidate = 3600 // revalidate hourly
+export const dynamic = 'force-dynamic'
 
 type VegRow = {
   id: string

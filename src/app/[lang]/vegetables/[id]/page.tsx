@@ -6,7 +6,7 @@ import Link from 'next/link'
 import MarketCompare from '@/components/MarketCompare'
 import PriceChartWrapper from '@/components/PriceChartWrapper'
 
-export const revalidate = 3600
+export const dynamic = 'force-dynamic'
 
 type PeriodKey = '1W' | '1M' | '3M' | '1Y'
 const PERIOD_DAYS: Record<PeriodKey, number> = { '1W': 7, '1M': 30, '3M': 90, '1Y': 365 }
