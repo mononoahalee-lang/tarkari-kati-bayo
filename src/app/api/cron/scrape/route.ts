@@ -5,7 +5,7 @@ import { scrapeAmpis } from '@/lib/scraper-ampis'
 export const runtime = 'nodejs'
 export const maxDuration = 300
 
-export async function POST(request: NextRequest) {
+async function runScrape(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -31,10 +31,11 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Allow GET for manual testing in dev
+// Vercel Cron sends GET — must handle GET in production
 export async function GET(request: NextRequest) {
-  if (process.env.NODE_ENV === 'production') {
-    return NextResponse.json({ error: 'Use POST' }, { status: 405 })
-  }
-  return POST(request)
+  return runScrape(request)
+}
+
+export async function POST(request: NextRequest) {
+  return runScrape(request)
 }

@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma'
 export const runtime = 'nodejs'
 export const maxDuration = 60
 
-export async function POST(request: NextRequest) {
+async function runNews(request: NextRequest): Promise<NextResponse> {
   const authHeader = request.headers.get('authorization')
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -59,4 +59,12 @@ Return ONLY a JSON array (no markdown):
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 })
   }
+}
+
+export async function GET(request: NextRequest) {
+  return runNews(request)
+}
+
+export async function POST(request: NextRequest) {
+  return runNews(request)
 }
