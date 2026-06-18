@@ -111,15 +111,16 @@ export default function ChartExplorer({ vegetables, markets, locale }: Props) {
   return (
     <div className="flex flex-col lg:flex-row gap-0 h-[calc(100vh-8rem)]">
       {/* Left: vegetable list */}
-      <div className="lg:w-72 xl:w-80 flex flex-col border-b lg:border-b-0 lg:border-r border-zinc-800 overflow-hidden">
-        <div className="p-3 border-b border-zinc-800">
+      <div className="lg:w-72 xl:w-80 flex flex-col border-b lg:border-b-0 lg:border-r border-zinc-700 overflow-hidden bg-zinc-900">
+        <div className="p-3 border-b border-zinc-700">
           <input
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={ui.search}
-            className="w-full rounded-md bg-zinc-800 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none focus:ring-1 focus:ring-green-500"
+            className="w-full rounded-md bg-zinc-800 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-400 outline-none focus:ring-1 focus:ring-green-500"
           />
+          <p className="mt-1.5 text-xs text-zinc-400">{filtered.length} items</p>
         </div>
         <div className="flex-1 overflow-y-auto">
           {filtered.map((v) => {
@@ -129,17 +130,21 @@ export default function ChartExplorer({ vegetables, markets, locale }: Props) {
               <button
                 key={v.id}
                 onClick={() => setSelectedId(v.id)}
-                className={`w-full flex items-center justify-between px-3 py-2 text-left text-sm transition-colors hover:bg-zinc-800 border-b border-zinc-900 ${isSelected ? 'bg-zinc-800 border-l-2 border-l-green-500' : ''}`}
+                className={`w-full flex items-center justify-between px-3 py-2.5 text-left text-sm transition-colors border-b border-zinc-800 ${
+                  isSelected
+                    ? 'bg-green-900/40 border-l-2 border-l-green-400'
+                    : 'hover:bg-zinc-800'
+                }`}
               >
-                <span className={`truncate ${isSelected ? 'text-zinc-100 font-medium' : 'text-zinc-300'}`}>
+                <span className={`truncate font-medium ${isSelected ? 'text-white' : 'text-zinc-100'}`}>
                   {getName(v, locale)}
                 </span>
-                <div className="flex items-center gap-2 ml-2 shrink-0">
+                <div className="flex flex-col items-end ml-2 shrink-0">
                   {v.avgPrice !== null && (
-                    <span className="font-mono text-xs text-zinc-400">{v.avgPrice.toFixed(0)}</span>
+                    <span className="font-mono text-sm font-semibold text-white">{v.avgPrice.toFixed(0)}</span>
                   )}
                   {pct !== null && (
-                    <span className={`font-mono text-xs ${pct >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    <span className={`font-mono text-xs font-medium ${pct >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                       {pct >= 0 ? '+' : ''}{pct.toFixed(1)}%
                     </span>
                   )}
@@ -157,20 +162,20 @@ export default function ChartExplorer({ vegetables, markets, locale }: Props) {
             {/* Header */}
             <div className="flex items-start justify-between gap-4 shrink-0">
               <div>
-                <h1 className="text-xl font-bold text-zinc-100">{getName(selected, locale)}</h1>
-                <p className="text-xs text-zinc-500 mt-0.5">
+                <h1 className="text-2xl font-bold text-white">{getName(selected, locale)}</h1>
+                <p className="text-sm text-zinc-400 mt-0.5">
                   {locale === 'ne' ? selected.nameEn : selected.nameNe} · NPR/{selected.unit}
                 </p>
               </div>
               <div className="text-right shrink-0">
                 {selected.avgPrice !== null && (
-                  <p className="text-2xl font-bold font-mono text-zinc-100">
+                  <p className="text-3xl font-bold font-mono text-white">
                     {selected.avgPrice.toFixed(2)}
                   </p>
                 )}
                 {changePct !== null && changePct !== undefined && (
-                  <p className={`text-sm font-mono font-medium ${changePct >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {changePct >= 0 ? '+' : ''}{changePct.toFixed(2)}%
+                  <p className={`text-base font-mono font-bold ${changePct >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {changePct >= 0 ? '▲ +' : '▼ '}{changePct.toFixed(2)}%
                   </p>
                 )}
               </div>
@@ -178,14 +183,15 @@ export default function ChartExplorer({ vegetables, markets, locale }: Props) {
 
             {/* Controls: period + market */}
             <div className="flex flex-wrap items-center gap-2 shrink-0">
-              {/* Period tabs */}
               <div className="flex gap-1">
                 {(Object.keys(PERIOD_DAYS) as Period[]).map((p) => (
                   <button
                     key={p}
                     onClick={() => setPeriod(p)}
-                    className={`rounded px-3 py-1 text-xs font-medium transition-colors ${
-                      p === period ? 'bg-green-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-100'
+                    className={`rounded px-4 py-1.5 text-sm font-semibold transition-colors ${
+                      p === period
+                        ? 'bg-green-600 text-white'
+                        : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white'
                     }`}
                   >
                     {PERIOD_LABELS[p][locale]}
@@ -193,12 +199,11 @@ export default function ChartExplorer({ vegetables, markets, locale }: Props) {
                 ))}
               </div>
 
-              {/* Market selector */}
               <div className="ml-auto">
                 <select
                   value={selectedMarketId}
                   onChange={(e) => setSelectedMarketId(e.target.value)}
-                  className="rounded-md bg-zinc-800 border border-zinc-700 px-2 py-1 text-xs text-zinc-300 outline-none focus:ring-1 focus:ring-green-500 cursor-pointer"
+                  className="rounded-md bg-zinc-800 border border-zinc-600 px-3 py-1.5 text-sm text-zinc-100 font-medium outline-none focus:ring-1 focus:ring-green-500 cursor-pointer"
                 >
                   <option value="all">{ui.allMarkets}</option>
                   {markets.map((m) => (
@@ -211,19 +216,19 @@ export default function ChartExplorer({ vegetables, markets, locale }: Props) {
             </div>
 
             {/* Chart */}
-            <div className="flex-1 min-h-0 rounded-lg border border-zinc-800 bg-zinc-900 p-3">
+            <div className="flex-1 min-h-0 rounded-lg border border-zinc-700 bg-zinc-900 p-3">
               {loading ? (
-                <div className="flex h-full items-center justify-center text-zinc-500 text-sm">{ui.loading}</div>
+                <div className="flex h-full items-center justify-center text-zinc-400 text-sm">{ui.loading}</div>
               ) : candlesticks.length > 0 ? (
                 <PriceChart data={candlesticks} height={undefined} className="h-full" />
               ) : (
-                <div className="flex h-full flex-col items-center justify-center gap-2 text-zinc-500 text-sm text-center px-4">
-                  <span className="text-2xl">📊</span>
-                  <p>{ui.noPriceHistory}</p>
+                <div className="flex h-full flex-col items-center justify-center gap-3 text-zinc-400 text-sm text-center px-8">
+                  <span className="text-4xl">📊</span>
+                  <p className="text-base font-medium text-zinc-300">{ui.noPriceHistory}</p>
                   {selectedMarketId !== 'all' && (
                     <button
                       onClick={() => setSelectedMarketId('all')}
-                      className="mt-1 text-xs text-green-500 hover:text-green-400 underline"
+                      className="mt-1 rounded-md bg-zinc-700 px-4 py-1.5 text-sm text-zinc-200 hover:bg-zinc-600 transition-colors"
                     >
                       → {ui.allMarkets}
                     </button>
@@ -234,17 +239,17 @@ export default function ChartExplorer({ vegetables, markets, locale }: Props) {
 
             {/* Stats */}
             {stats && (
-              <div className="grid grid-cols-3 gap-2 shrink-0">
+              <div className="grid grid-cols-3 gap-3 shrink-0">
                 {[
-                  { label: ui.high, value: stats.high.toFixed(2) },
-                  { label: ui.low, value: stats.low.toFixed(2) },
-                  { label: ui.avg, value: stats.avg.toFixed(2) },
-                ].map(({ label, value }) => (
-                  <div key={label} className="rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-center">
-                    <p className="text-xs text-zinc-500">{label}</p>
-                    <p className="mt-0.5 font-mono text-base font-semibold text-zinc-100">{value}</p>
+                  { label: ui.high, value: stats.high.toFixed(2), color: 'text-green-400' },
+                  { label: ui.avg, value: stats.avg.toFixed(2), color: 'text-white' },
+                  { label: ui.low, value: stats.low.toFixed(2), color: 'text-red-400' },
+                ].map(({ label, value, color }) => (
+                  <div key={label} className="rounded-lg border border-zinc-700 bg-zinc-800 p-3 text-center">
+                    <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide">{label}</p>
+                    <p className={`mt-1 font-mono text-lg font-bold ${color}`}>{value}</p>
                     {label === ui.avg && (
-                      <p className="text-xs text-zinc-600">{marketLabel}</p>
+                      <p className="text-xs text-zinc-500 mt-0.5">{marketLabel}</p>
                     )}
                   </div>
                 ))}
@@ -252,7 +257,7 @@ export default function ChartExplorer({ vegetables, markets, locale }: Props) {
             )}
           </>
         ) : (
-          <div className="flex h-full items-center justify-center text-zinc-500 text-sm">{ui.select}</div>
+          <div className="flex h-full items-center justify-center text-zinc-400 text-base">{ui.select}</div>
         )}
       </div>
     </div>

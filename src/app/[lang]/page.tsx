@@ -107,15 +107,30 @@ export default async function HomePage({ params }: { params: Promise<{ lang: str
   const gainers = [...withData].filter((r) => (r.changePct ?? 0) > 0).sort((a, b) => (b.changePct ?? 0) - (a.changePct ?? 0)).slice(0, 5)
   const losers = [...withData].filter((r) => (r.changePct ?? 0) < 0).sort((a, b) => (a.changePct ?? 0) - (b.changePct ?? 0)).slice(0, 5)
 
+  const chartLabel = locale === 'ne' ? 'चार्ट हेर्नुहोस् →' : locale === 'ja' ? 'チャートを見る →' : 'View Price Charts →'
+  const chartDesc = locale === 'ne' ? 'मूल्य इतिहास र बजार तुलना' : locale === 'ja' ? '価格履歴・市場別比較' : 'Price history & market comparison'
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 space-y-8">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-zinc-100">{dict.home.title}</h1>
-        <p className="text-sm text-zinc-400 mt-1">{dict.home.subtitle}</p>
-        {withData[0]?.date && (
-          <p className="text-xs text-zinc-500 mt-1">{dict.home.updated}: {withData[0].date}</p>
-        )}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-zinc-100">{dict.home.title}</h1>
+          <p className="text-sm text-zinc-400 mt-1">{dict.home.subtitle}</p>
+          {withData[0]?.date && (
+            <p className="text-xs text-zinc-500 mt-1">{dict.home.updated}: {withData[0].date}</p>
+          )}
+        </div>
+        <Link
+          href={`/${locale}/chart`}
+          className="flex items-center gap-3 rounded-xl border border-green-700 bg-green-950/50 px-4 py-3 hover:bg-green-900/50 transition-colors group"
+        >
+          <span className="text-2xl">📈</span>
+          <div>
+            <p className="text-sm font-bold text-green-400 group-hover:text-green-300">{chartLabel}</p>
+            <p className="text-xs text-zinc-400">{chartDesc}</p>
+          </div>
+        </Link>
       </div>
 
       {withData.length === 0 ? (
