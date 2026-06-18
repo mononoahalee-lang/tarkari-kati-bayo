@@ -22,33 +22,41 @@ type MarketItem = {
   nameNe: string
 }
 
-type Period = '1W' | '1M' | '3M' | '1Y'
-const PERIOD_DAYS: Record<Period, number> = { '1W': 7, '1M': 30, '3M': 90, '1Y': 365 }
+type Period = '1W' | '1M' | '3M' | '1Y' | '3Y'
+const PERIOD_DAYS: Record<Period, number> = { '1W': 7, '1M': 30, '3M': 90, '1Y': 365, '3Y': 1095 }
 const PERIOD_LABELS: Record<Period, Record<Locale, string>> = {
   '1W': { ne: '१ हप्ता', en: '1W', ja: '1週' },
   '1M': { ne: '१ महिना', en: '1M', ja: '1ヶ月' },
   '3M': { ne: '३ महिना', en: '3M', ja: '3ヶ月' },
   '1Y': { ne: '१ वर्ष', en: '1Y', ja: '1年' },
+  '3Y': { ne: '३ वर्ष', en: '3Y', ja: '3年' },
 }
 
 const UI: Record<Locale, {
   search: string; select: string; noData: string; high: string; low: string; avg: string
   loading: string; noPriceHistory: string; allMarkets: string; market: string
+  avgPrice: string; allMarketsAvg: string; marketCompare: string; min: string; max: string
 }> = {
   ne: {
     search: 'तरकारी खोज्नुहोस्...', select: 'तरकारी चुन्नुहोस्', noData: 'डेटा उपलब्ध छैन',
     high: 'उच्च', low: 'न्यून', avg: 'औसत', loading: 'लोड हुँदैछ...', noPriceHistory: 'मूल्य इतिहास उपलब्ध छैन',
     allMarkets: 'सबै बजार', market: 'बजार',
+    avgPrice: 'औसत थोक मूल्य', allMarketsAvg: 'सबै बजारको औसत', marketCompare: 'बजारअनुसार मूल्य',
+    min: 'न्यून', max: 'उच्च',
   },
   en: {
     search: 'Search vegetables...', select: 'Select a vegetable', noData: 'No data',
     high: 'High', low: 'Low', avg: 'Avg', loading: 'Loading...', noPriceHistory: 'No price history yet. Data is collected daily.',
     allMarkets: 'All Markets', market: 'Market',
+    avgPrice: 'Avg. Wholesale Price', allMarketsAvg: 'All markets average', marketCompare: 'Price by Market',
+    min: 'Min', max: 'Max',
   },
   ja: {
     search: '野菜を検索...', select: '野菜を選択', noData: 'データなし',
     high: '最高値', low: '最安値', avg: '平均', loading: '読み込み中...', noPriceHistory: '価格履歴がありません（毎日更新）',
     allMarkets: '全市場', market: '市場',
+    avgPrice: '平均卸売価格', allMarketsAvg: '全市場の平均', marketCompare: '市場別価格',
+    min: '最低値', max: '最高値',
   },
 }
 
@@ -71,6 +79,11 @@ export default function ChartExplorer({ vegetables, markets, locale }: Props) {
   const [candlesticks, setCandlesticks] = useState<CandlestickPoint[]>([])
   const [stats, setStats] = useState<{ high: number; low: number; avg: number } | null>(null)
   const [loading, setLoading] = useState(false)
+  const [marketPrices, setMarketPrices] = useState<Array<{
+    marketId: string; marketNameEn: string; marketNameNe: string
+    district: string; minPrice: number; maxPrice: number; avgPrice: number; date: string
+  }>>([])
+  const [loadingMarkets, setLoadingMarkets] = useState(false)
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase()
@@ -102,6 +115,16 @@ export default function ChartExplorer({ vegetables, markets, locale }: Props) {
   useEffect(() => {
     if (selectedId) fetchChart(selectedId, period, selectedMarketId)
   }, [selectedId, period, selectedMarketId, fetchChart])
+
+  useEffect(() => {
+    if (!selectedId) return
+    setLoadingMarkets(true)
+    fetch(`/api/vegetables/${selectedId}/market-compare`)
+      .then((r) => r.json())
+      .then((data) => setMarketPrices(data ?? []))
+      .catch(() => setMarketPrices([]))
+      .finally(() => setLoadingMarkets(false))
+  }, [selectedId])
 
   const changePct = selected?.changePct
   const marketLabel = selectedMarketId === 'all'
@@ -169,12 +192,15 @@ export default function ChartExplorer({ vegetables, markets, locale }: Props) {
               </div>
               <div className="text-right shrink-0">
                 {selected.avgPrice !== null && (
-                  <p className="text-3xl font-bold font-mono text-white">
-                    {selected.avgPrice.toFixed(2)}
-                  </p>
+                  <>
+                    <p className="text-3xl font-bold font-mono text-white">
+                      {selected.avgPrice.toFixed(2)}
+                    </p>
+                    <p className="text-xs text-zinc-500 mt-0.5">{ui.avgPrice} · {ui.allMarketsAvg}</p>
+                  </>
                 )}
                 {changePct !== null && changePct !== undefined && (
-                  <p className={`text-base font-mono font-bold ${changePct >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  <p className={`text-base font-mono font-bold mt-1 ${changePct >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                     {changePct >= 0 ? '▲ +' : '▼ '}{changePct.toFixed(2)}%
                   </p>
                 )}
@@ -255,6 +281,61 @@ export default function ChartExplorer({ vegetables, markets, locale }: Props) {
                 ))}
               </div>
             )}
+
+            {/* Market comparison table */}
+            <div className="shrink-0 rounded-lg border border-zinc-700 bg-zinc-900 overflow-hidden">
+              <div className="px-3 py-2 border-b border-zinc-700 flex items-center justify-between">
+                <h3 className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">{ui.marketCompare}</h3>
+                {marketPrices.length > 0 && (
+                  <span className="text-xs text-zinc-500">{marketPrices[0]?.date}</span>
+                )}
+              </div>
+              {loadingMarkets ? (
+                <div className="p-3 text-xs text-zinc-500">{ui.loading}</div>
+              ) : marketPrices.length === 0 ? (
+                <div className="p-3 text-xs text-zinc-500">{ui.noData}</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-zinc-800 text-zinc-500 uppercase tracking-wider">
+                        <th className="px-3 py-1.5 text-left">{ui.market}</th>
+                        <th className="px-3 py-1.5 text-right">{ui.min}</th>
+                        <th className="px-3 py-1.5 text-right font-bold text-zinc-300">{ui.avg}</th>
+                        <th className="px-3 py-1.5 text-right">{ui.max}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {marketPrices
+                        .sort((a, b) => (a.avgPrice ?? 0) - (b.avgPrice ?? 0))
+                        .map((mp) => (
+                          <tr
+                            key={mp.marketId}
+                            className={`border-b border-zinc-800/50 hover:bg-zinc-800/50 transition-colors ${
+                              mp.marketId === selectedMarketId ? 'bg-green-900/20' : ''
+                            }`}
+                          >
+                            <td className="px-3 py-1.5">
+                              <button
+                                onClick={() => setSelectedMarketId(mp.marketId)}
+                                className="text-left hover:text-green-400 transition-colors"
+                              >
+                                <span className="font-medium text-zinc-200">
+                                  {locale === 'ne' ? mp.marketNameNe : mp.marketNameEn}
+                                </span>
+                                <span className="ml-1 text-zinc-500">{mp.district}</span>
+                              </button>
+                            </td>
+                            <td className="px-3 py-1.5 text-right font-mono text-zinc-400">{mp.minPrice.toFixed(0)}</td>
+                            <td className="px-3 py-1.5 text-right font-mono font-bold text-white">{mp.avgPrice.toFixed(2)}</td>
+                            <td className="px-3 py-1.5 text-right font-mono text-zinc-400">{mp.maxPrice.toFixed(0)}</td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </>
         ) : (
           <div className="flex h-full items-center justify-center text-zinc-400 text-base">{ui.select}</div>
