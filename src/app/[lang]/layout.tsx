@@ -38,22 +38,22 @@ export default async function LangLayout({
   const dict = await getDictionary(locale)
 
   return (
-    <html lang={locale} className="h-full">
-      <body className="min-h-full flex flex-col bg-zinc-950 text-zinc-100">
-        <header className="sticky top-0 z-50 border-b border-zinc-800 bg-zinc-950/90 backdrop-blur">
+    <html lang={locale} className="h-full" style={{ backgroundColor: '#09090b' }}>
+      <body className="min-h-full flex flex-col bg-zinc-950 text-zinc-100" style={{ backgroundColor: '#09090b', color: '#f4f4f5' }}>
+        <header className="sticky top-0 z-50 border-b border-zinc-800 bg-zinc-950/90 backdrop-blur" style={{ backgroundColor: 'rgba(9,9,11,0.9)' }}>
           <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
             <Link href={`/${locale}`} className="flex items-center gap-2">
               <span className="text-lg font-bold text-green-400">🥬</span>
               <span className="text-sm font-semibold tracking-tight text-zinc-100">Tarkari Kati Bayo</span>
             </Link>
             <nav className="flex items-center gap-4 text-sm">
-              <Link href={`/${locale}`} className="text-zinc-400 hover:text-zinc-100 transition-colors">
+              <Link href={`/${locale}`} className="text-zinc-200 hover:text-white transition-colors">
                 {dict.nav.home}
               </Link>
-              <Link href={`/${locale}/chart`} className="text-zinc-400 hover:text-zinc-100 transition-colors">
+              <Link href={`/${locale}/chart`} className="text-zinc-200 hover:text-white transition-colors">
                 {dict.nav.chart}
               </Link>
-              <Link href={`/${locale}/news`} className="text-zinc-400 hover:text-zinc-100 transition-colors">
+              <Link href={`/${locale}/news`} className="text-zinc-200 hover:text-white transition-colors">
                 {dict.nav.news}
               </Link>
               <div className="flex gap-1 rounded-md border border-zinc-700 p-0.5">
