@@ -127,6 +127,18 @@ export default function ChartExplorer({ vegetables, markets, locale }: Props) {
   }, [selectedId])
 
   const changePct = selected?.changePct
+
+  // When a specific market is selected, show that market's price instead of all-markets average
+  const selectedMarketPrice = selectedMarketId !== 'all'
+    ? marketPrices.find((mp) => mp.marketId === selectedMarketId) ?? null
+    : null
+
+  const displayPrice = selectedMarketPrice?.avgPrice ?? selected?.avgPrice ?? null
+  const displayPriceLabel = selectedMarketPrice
+    ? (locale === 'ne' ? selectedMarketPrice.marketNameNe : selectedMarketPrice.marketNameEn)
+    : ui.allMarketsAvg
+  const displaySubLabel = selectedMarketPrice ? ui.avgPrice : `${ui.avgPrice} · ${ui.allMarketsAvg}`
+
   const marketLabel = selectedMarketId === 'all'
     ? ui.allMarkets
     : (markets.find((m) => m.id === selectedMarketId)?.nameEn ?? ui.allMarkets)
@@ -191,12 +203,15 @@ export default function ChartExplorer({ vegetables, markets, locale }: Props) {
                 </p>
               </div>
               <div className="text-right shrink-0">
-                {selected.avgPrice !== null && (
+                {displayPrice !== null && (
                   <>
                     <p className="text-3xl font-bold font-mono text-white">
-                      {selected.avgPrice.toFixed(2)}
+                      {displayPrice.toFixed(2)}
                     </p>
-                    <p className="text-xs text-zinc-500 mt-0.5">{ui.avgPrice} · {ui.allMarketsAvg}</p>
+                    <p className="text-xs text-zinc-500 mt-0.5">{displaySubLabel}</p>
+                    {selectedMarketPrice && (
+                      <p className="text-xs text-green-400 font-medium mt-0.5">{displayPriceLabel}</p>
+                    )}
                   </>
                 )}
                 {changePct !== null && changePct !== undefined && (

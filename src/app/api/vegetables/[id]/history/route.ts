@@ -15,7 +15,7 @@ export async function GET(
   const since = new Date()
   since.setDate(since.getDate() - days)
 
-  const records = await prisma.priceRecord.findMany({
+  let records = await prisma.priceRecord.findMany({
     where: {
       vegetableId: id,
       date: { gte: since },
@@ -24,6 +24,16 @@ export async function GET(
     orderBy: { date: 'asc' },
     include: { market: { select: { nameEn: true, nameNe: true } } },
   })
+
+  // If the requested period has no data for this specific market, fall back to all available data
+  if (records.length === 0 && marketId) {
+    records = await prisma.priceRecord.findMany({
+      where: { vegetableId: id, marketId },
+      orderBy: { date: 'asc' },
+      take: 1095,
+      include: { market: { select: { nameEn: true, nameNe: true } } },
+    })
+  }
 
   // Group by date to ensure unique timestamps for TradingView (multiple markets may report same date)
   type DateAgg = { min: number; max: number; avgSum: number; count: number; marketEn: string; marketNe: string }

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { createChart, CandlestickSeries, type IChartApi } from 'lightweight-charts'
+import { createChart, AreaSeries, LineSeries, type IChartApi } from 'lightweight-charts'
 import type { CandlestickPoint } from '@/types'
 
 interface Props {
@@ -28,30 +28,42 @@ export default function PriceChart({ data, height = 320, className }: Props) {
         vertLines: { color: '#27272a' },
         horzLines: { color: '#27272a' },
       },
-      crosshair: {
-        mode: 1,
-      },
-      rightPriceScale: {
-        borderColor: '#3f3f46',
-      },
-      timeScale: {
-        borderColor: '#3f3f46',
-        timeVisible: true,
-      },
+      crosshair: { mode: 1 },
+      rightPriceScale: { borderColor: '#3f3f46' },
+      timeScale: { borderColor: '#3f3f46', timeVisible: true },
     })
     chartRef.current = chart
 
-    const candleSeries = chart.addSeries(CandlestickSeries, {
-      upColor: '#22c55e',
-      downColor: '#ef4444',
-      borderUpColor: '#22c55e',
-      borderDownColor: '#ef4444',
-      wickUpColor: '#22c55e',
-      wickDownColor: '#ef4444',
+    // Area series for the avg price with filled background
+    const areaSeries = chart.addSeries(AreaSeries, {
+      lineColor: '#22c55e',
+      topColor: 'rgba(34, 197, 94, 0.25)',
+      bottomColor: 'rgba(34, 197, 94, 0.02)',
+      lineWidth: 2,
+    })
+
+    // High price line (subtle)
+    const highSeries = chart.addSeries(LineSeries, {
+      color: 'rgba(34, 197, 94, 0.35)',
+      lineWidth: 1,
+      lineStyle: 2, // dashed
+      lastValueVisible: false,
+      priceLineVisible: false,
+    })
+
+    // Low price line (subtle)
+    const lowSeries = chart.addSeries(LineSeries, {
+      color: 'rgba(239, 68, 68, 0.35)',
+      lineWidth: 1,
+      lineStyle: 2, // dashed
+      lastValueVisible: false,
+      priceLineVisible: false,
     })
 
     if (data.length > 0) {
-      candleSeries.setData(data as Parameters<typeof candleSeries.setData>[0])
+      areaSeries.setData(data.map((d) => ({ time: d.time, value: d.close })))
+      highSeries.setData(data.map((d) => ({ time: d.time, value: d.high })))
+      lowSeries.setData(data.map((d) => ({ time: d.time, value: d.low })))
       chart.timeScale().fitContent()
     }
 
