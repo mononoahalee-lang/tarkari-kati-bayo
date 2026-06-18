@@ -16,7 +16,7 @@ async function main() {
   if (needsTranslation.length === 0) { console.log('All done!'); return }
 
   // Process in batches of 50
-  const batchSize = 50
+  const batchSize = 20
   let totalUpdated = 0
 
   for (let i = 0; i < needsTranslation.length; i += batchSize) {
@@ -32,8 +32,10 @@ ${nameList}`
 
     console.log(`Translating batch ${Math.floor(i / batchSize) + 1} (${batch.length} items)...`)
     const text = await generateText(prompt)
-    const jsonMatch = text.match(/\[[\s\S]*\]/)
-    if (!jsonMatch) { console.error('No JSON in response:', text.slice(0, 200)); continue }
+    // Strip markdown code block if present, then find JSON array
+    const stripped = text.replace(/^```(?:json)?\s*/m, '').replace(/\s*```\s*$/m, '')
+    const jsonMatch = stripped.match(/\[[\s\S]*\]/)
+    if (!jsonMatch) { console.error('No JSON in response:', text.slice(0, 300)); continue }
 
     const translations: Array<{ nameNe: string; nameEn: string; nameJa: string }> = JSON.parse(jsonMatch[0])
 
