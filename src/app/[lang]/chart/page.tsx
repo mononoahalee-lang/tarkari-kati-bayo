@@ -51,14 +51,21 @@ async function getVegetablesWithPrice() {
   })
 }
 
+async function getMarkets() {
+  return prisma.market.findMany({
+    select: { id: true, nameEn: true, nameNe: true, district: true },
+    orderBy: { nameEn: 'asc' },
+  })
+}
+
 export default async function ChartPage({ params }: { params: Promise<{ lang: string }> }) {
   const { lang } = await params
   if (!hasLocale(lang)) notFound()
 
   const locale = lang as Locale
-  const vegetables = await getVegetablesWithPrice()
+  const [vegetables, markets] = await Promise.all([getVegetablesWithPrice(), getMarkets()])
 
   return (
-    <ChartExplorer vegetables={vegetables} locale={locale} />
+    <ChartExplorer vegetables={vegetables} markets={markets} locale={locale} />
   )
 }

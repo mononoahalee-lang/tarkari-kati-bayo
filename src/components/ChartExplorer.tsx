@@ -16,6 +16,12 @@ type VegItem = {
   changePct: number | null
 }
 
+type MarketItem = {
+  id: string
+  nameEn: string
+  nameNe: string
+}
+
 type Period = '1W' | '1M' | '3M' | '1Y'
 const PERIOD_DAYS: Record<Period, number> = { '1W': 7, '1M': 30, '3M': 90, '1Y': 365 }
 const PERIOD_LABELS: Record<Period, Record<Locale, string>> = {
@@ -25,10 +31,25 @@ const PERIOD_LABELS: Record<Period, Record<Locale, string>> = {
   '1Y': { ne: '१ वर्ष', en: '1Y', ja: '1年' },
 }
 
-const UI: Record<Locale, { search: string; select: string; noData: string; high: string; low: string; avg: string; loading: string; noPriceHistory: string }> = {
-  ne: { search: 'तरकारी खोज्नुहोस्...', select: 'तरकारी चुन्नुहोस्', noData: 'डेटा उपलब्ध छैन', high: 'उच्च', low: 'न्यून', avg: 'औसत', loading: 'लोड हुँदैछ...', noPriceHistory: 'मूल्य इतिहास उपलब्ध छैन' },
-  en: { search: 'Search vegetables...', select: 'Select a vegetable', noData: 'No data', high: 'High', low: 'Low', avg: 'Avg', loading: 'Loading...', noPriceHistory: 'No price history yet' },
-  ja: { search: '野菜を検索...', select: '野菜を選択', noData: 'データなし', high: '最高値', low: '最安値', avg: '平均', loading: '読み込み中...', noPriceHistory: '価格履歴がありません' },
+const UI: Record<Locale, {
+  search: string; select: string; noData: string; high: string; low: string; avg: string
+  loading: string; noPriceHistory: string; allMarkets: string; market: string
+}> = {
+  ne: {
+    search: 'तरकारी खोज्नुहोस्...', select: 'तरकारी चुन्नुहोस्', noData: 'डेटा उपलब्ध छैन',
+    high: 'उच्च', low: 'न्यून', avg: 'औसत', loading: 'लोड हुँदैछ...', noPriceHistory: 'मूल्य इतिहास उपलब्ध छैन',
+    allMarkets: 'सबै बजार', market: 'बजार',
+  },
+  en: {
+    search: 'Search vegetables...', select: 'Select a vegetable', noData: 'No data',
+    high: 'High', low: 'Low', avg: 'Avg', loading: 'Loading...', noPriceHistory: 'No price history yet. Data is collected daily.',
+    allMarkets: 'All Markets', market: 'Market',
+  },
+  ja: {
+    search: '野菜を検索...', select: '野菜を選択', noData: 'データなし',
+    high: '最高値', low: '最安値', avg: '平均', loading: '読み込み中...', noPriceHistory: '価格履歴がありません（毎日更新）',
+    allMarkets: '全市場', market: '市場',
+  },
 }
 
 function getName(v: VegItem, locale: Locale) {
@@ -37,13 +58,15 @@ function getName(v: VegItem, locale: Locale) {
 
 interface Props {
   vegetables: VegItem[]
+  markets: MarketItem[]
   locale: Locale
 }
 
-export default function ChartExplorer({ vegetables, locale }: Props) {
+export default function ChartExplorer({ vegetables, markets, locale }: Props) {
   const ui = UI[locale]
   const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(vegetables[0]?.id ?? null)
+  const [selectedMarketId, setSelectedMarketId] = useState<string>('all')
   const [period, setPeriod] = useState<Period>('1M')
   const [candlesticks, setCandlesticks] = useState<CandlestickPoint[]>([])
   const [stats, setStats] = useState<{ high: number; low: number; avg: number } | null>(null)
@@ -61,10 +84,12 @@ export default function ChartExplorer({ vegetables, locale }: Props) {
 
   const selected = useMemo(() => vegetables.find((v) => v.id === selectedId) ?? null, [vegetables, selectedId])
 
-  const fetchChart = useCallback(async (id: string, p: Period) => {
+  const fetchChart = useCallback(async (id: string, p: Period, marketId: string) => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/vegetables/${id}/history?days=${PERIOD_DAYS[p]}`)
+      const params = new URLSearchParams({ days: String(PERIOD_DAYS[p]) })
+      if (marketId !== 'all') params.set('marketId', marketId)
+      const res = await fetch(`/api/vegetables/${id}/history?${params}`)
       if (!res.ok) return
       const data = await res.json()
       setCandlesticks(data.candlesticks ?? [])
@@ -75,10 +100,13 @@ export default function ChartExplorer({ vegetables, locale }: Props) {
   }, [])
 
   useEffect(() => {
-    if (selectedId) fetchChart(selectedId, period)
-  }, [selectedId, period, fetchChart])
+    if (selectedId) fetchChart(selectedId, period, selectedMarketId)
+  }, [selectedId, period, selectedMarketId, fetchChart])
 
   const changePct = selected?.changePct
+  const marketLabel = selectedMarketId === 'all'
+    ? ui.allMarkets
+    : (markets.find((m) => m.id === selectedMarketId)?.nameEn ?? ui.allMarkets)
 
   return (
     <div className="flex flex-col lg:flex-row gap-0 h-[calc(100vh-8rem)]">
@@ -123,7 +151,7 @@ export default function ChartExplorer({ vegetables, locale }: Props) {
       </div>
 
       {/* Right: chart panel */}
-      <div className="flex-1 flex flex-col overflow-hidden p-4 gap-4 min-h-0">
+      <div className="flex-1 flex flex-col overflow-hidden p-4 gap-3 min-h-0">
         {selected ? (
           <>
             {/* Header */}
@@ -148,19 +176,38 @@ export default function ChartExplorer({ vegetables, locale }: Props) {
               </div>
             </div>
 
-            {/* Period tabs */}
-            <div className="flex gap-1 shrink-0">
-              {(Object.keys(PERIOD_DAYS) as Period[]).map((p) => (
-                <button
-                  key={p}
-                  onClick={() => setPeriod(p)}
-                  className={`rounded px-3 py-1 text-xs font-medium transition-colors ${
-                    p === period ? 'bg-green-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-100'
-                  }`}
+            {/* Controls: period + market */}
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              {/* Period tabs */}
+              <div className="flex gap-1">
+                {(Object.keys(PERIOD_DAYS) as Period[]).map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => setPeriod(p)}
+                    className={`rounded px-3 py-1 text-xs font-medium transition-colors ${
+                      p === period ? 'bg-green-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-100'
+                    }`}
+                  >
+                    {PERIOD_LABELS[p][locale]}
+                  </button>
+                ))}
+              </div>
+
+              {/* Market selector */}
+              <div className="ml-auto">
+                <select
+                  value={selectedMarketId}
+                  onChange={(e) => setSelectedMarketId(e.target.value)}
+                  className="rounded-md bg-zinc-800 border border-zinc-700 px-2 py-1 text-xs text-zinc-300 outline-none focus:ring-1 focus:ring-green-500 cursor-pointer"
                 >
-                  {PERIOD_LABELS[p][locale]}
-                </button>
-              ))}
+                  <option value="all">{ui.allMarkets}</option>
+                  {markets.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {locale === 'ne' ? m.nameNe : m.nameEn}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             {/* Chart */}
@@ -170,7 +217,18 @@ export default function ChartExplorer({ vegetables, locale }: Props) {
               ) : candlesticks.length > 0 ? (
                 <PriceChart data={candlesticks} height={undefined} className="h-full" />
               ) : (
-                <div className="flex h-full items-center justify-center text-zinc-500 text-sm">{ui.noPriceHistory}</div>
+                <div className="flex h-full flex-col items-center justify-center gap-2 text-zinc-500 text-sm text-center px-4">
+                  <span className="text-2xl">📊</span>
+                  <p>{ui.noPriceHistory}</p>
+                  {selectedMarketId !== 'all' && (
+                    <button
+                      onClick={() => setSelectedMarketId('all')}
+                      className="mt-1 text-xs text-green-500 hover:text-green-400 underline"
+                    >
+                      → {ui.allMarkets}
+                    </button>
+                  )}
+                </div>
               )}
             </div>
 
@@ -185,6 +243,9 @@ export default function ChartExplorer({ vegetables, locale }: Props) {
                   <div key={label} className="rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-center">
                     <p className="text-xs text-zinc-500">{label}</p>
                     <p className="mt-0.5 font-mono text-base font-semibold text-zinc-100">{value}</p>
+                    {label === ui.avg && (
+                      <p className="text-xs text-zinc-600">{marketLabel}</p>
+                    )}
                   </div>
                 ))}
               </div>
