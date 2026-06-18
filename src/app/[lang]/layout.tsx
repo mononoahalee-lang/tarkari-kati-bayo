@@ -50,6 +50,9 @@ export default async function LangLayout({
               <Link href={`/${locale}`} className="text-zinc-400 hover:text-zinc-100 transition-colors">
                 {dict.nav.home}
               </Link>
+              <Link href={`/${locale}/chart`} className="text-zinc-400 hover:text-zinc-100 transition-colors">
+                {dict.nav.chart}
+              </Link>
               <Link href={`/${locale}/news`} className="text-zinc-400 hover:text-zinc-100 transition-colors">
                 {dict.nav.news}
               </Link>

@@ -2,7 +2,8 @@
   "nav": {
     "home": "Home",
     "markets": "Markets",
-    "news": "News"
+    "news": "News",
+    "chart": "Chart"
   },
   "home": {
     "title": "Tarkari Kati Bayo",

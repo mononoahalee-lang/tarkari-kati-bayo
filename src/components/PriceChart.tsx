@@ -7,17 +7,19 @@ import type { CandlestickPoint } from '@/types'
 interface Props {
   data: CandlestickPoint[]
   height?: number
+  className?: string
 }
 
-export default function PriceChart({ data, height = 320 }: Props) {
+export default function PriceChart({ data, height = 320, className }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
 
   useEffect(() => {
     if (!containerRef.current) return
+    const h = height ?? containerRef.current.clientHeight
 
     const chart = createChart(containerRef.current, {
-      height,
+      height: h,
       layout: {
         background: { color: '#18181b' },
         textColor: '#a1a1aa',
@@ -68,5 +70,5 @@ export default function PriceChart({ data, height = 320 }: Props) {
     }
   }, [data, height])
 
-  return <div ref={containerRef} className="w-full rounded-lg overflow-hidden" style={{ height }} />
+  return <div ref={containerRef} className={`w-full rounded-lg overflow-hidden ${className ?? ''}`} style={height !== undefined ? { height } : { height: '100%' }} />
 }
