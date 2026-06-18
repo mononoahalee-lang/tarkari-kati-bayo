@@ -9,7 +9,7 @@ export async function GET(
 ) {
   const { id } = await params
   const { searchParams } = new URL(request.url)
-  const days = Math.min(parseInt(searchParams.get('days') ?? '30'), 365)
+  const days = Math.min(parseInt(searchParams.get('days') ?? '30'), 1095)
   const marketId = searchParams.get('marketId') ?? undefined
 
   const since = new Date()
@@ -25,25 +25,52 @@ export async function GET(
     include: { market: { select: { nameEn: true, nameNe: true } } },
   })
 
-  // Build candlestick data: open = prev avg, close = avg, high = max, low = min
-  const candlesticks = records.map((r, i) => ({
-    time: r.date.toISOString().split('T')[0],
-    open: i > 0 ? records[i - 1].avgPrice : r.avgPrice,
-    high: r.maxPrice,
-    low: r.minPrice,
-    close: r.avgPrice,
-    marketEn: r.market.nameEn,
-    marketNe: r.market.nameNe,
-  }))
+  // Group by date to ensure unique timestamps for TradingView (multiple markets may report same date)
+  type DateAgg = { min: number; max: number; avgSum: number; count: number; marketEn: string; marketNe: string }
+  const dateMap = new Map<string, DateAgg>()
+  for (const r of records) {
+    const dateStr = r.date.toISOString().split('T')[0]
+    const existing = dateMap.get(dateStr)
+    if (existing) {
+      existing.min = Math.min(existing.min, r.minPrice)
+      existing.max = Math.max(existing.max, r.maxPrice)
+      existing.avgSum += r.avgPrice
+      existing.count++
+    } else {
+      dateMap.set(dateStr, {
+        min: r.minPrice,
+        max: r.maxPrice,
+        avgSum: r.avgPrice,
+        count: 1,
+        marketEn: r.market.nameEn,
+        marketNe: r.market.nameNe,
+      })
+    }
+  }
+
+  const sorted = Array.from(dateMap.entries()).sort(([a], [b]) => a.localeCompare(b))
+
+  const candlesticks = sorted.map(([date, d], i) => {
+    const avg = d.avgSum / d.count
+    const prevAvg = i > 0 ? sorted[i - 1][1].avgSum / sorted[i - 1][1].count : avg
+    return {
+      time: date,
+      open: prevAvg,
+      high: d.max,
+      low: d.min,
+      close: avg,
+      marketEn: d.marketEn,
+      marketNe: d.marketNe,
+    }
+  })
 
   // Stats
-  const prices = records.map((r) => r.avgPrice)
   const stats =
-    prices.length > 0
+    sorted.length > 0
       ? {
-          high: Math.max(...records.map((r) => r.maxPrice)),
-          low: Math.min(...records.map((r) => r.minPrice)),
-          avg: prices.reduce((a, b) => a + b, 0) / prices.length,
+          high: Math.max(...sorted.map(([, d]) => d.max)),
+          low: Math.min(...sorted.map(([, d]) => d.min)),
+          avg: sorted.reduce((a, [, d]) => a + d.avgSum / d.count, 0) / sorted.length,
         }
       : null
 

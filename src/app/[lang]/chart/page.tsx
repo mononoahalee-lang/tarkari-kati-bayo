@@ -15,7 +15,7 @@ async function getVegetablesWithPrice() {
   const latestDates = await prisma.priceRecord.findMany({
     distinct: ['date'],
     orderBy: { date: 'desc' },
-    take: 2,
+    take: 30,
     select: { date: true },
   })
 
@@ -23,7 +23,10 @@ async function getVegetablesWithPrice() {
     return vegetables.map((v) => ({ ...v, avgPrice: null, changePct: null }))
   }
 
-  const [latestDate, prevDate] = latestDates
+  const latestDate = latestDates[0]
+  const sevenDaysAgo = new Date(latestDate.date)
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+  const prevDate = latestDates.find((d) => d.date <= sevenDaysAgo) ?? latestDates[1]
 
   const [latestRecords, prevRecords] = await Promise.all([
     prisma.priceRecord.groupBy({
