@@ -4,8 +4,11 @@ import { prisma } from './prisma'
 const KALIMATI_URL = 'https://kalimatimarket.gov.np/price'
 const KALIMATI_MARKET_EN = 'Kalimati'
 
-export async function scrapeKalimati(): Promise<number> {
-  const res = await fetch(KALIMATI_URL, {
+export async function scrapeKalimati(targetDate?: Date): Promise<number> {
+  const url = targetDate
+    ? `${KALIMATI_URL}?date=${targetDate.toISOString().split('T')[0]}`
+    : KALIMATI_URL
+  const res = await fetch(url, {
     headers: { 'User-Agent': 'Mozilla/5.0 (compatible; TarkariBot/1.0)' },
     next: { revalidate: 0 },
   })
@@ -24,7 +27,7 @@ export async function scrapeKalimati(): Promise<number> {
     },
   })
 
-  const today = new Date()
+  const today = targetDate ? new Date(targetDate) : new Date()
   today.setHours(0, 0, 0, 0)
 
   let saved = 0
