@@ -1,16 +1,33 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { createChart, AreaSeries, LineSeries, type IChartApi } from 'lightweight-charts'
+import { createChart, AreaSeries, LineSeries, type IChartApi, type UTCTimestamp } from 'lightweight-charts'
 import type { CandlestickPoint } from '@/types'
 
 interface Props {
   data: CandlestickPoint[]
+  visibleDays?: number
   height?: number
   className?: string
 }
 
-export default function PriceChart({ data, height = 320, className }: Props) {
+function applyVisibleRange(chart: IChartApi, data: CandlestickPoint[], visibleDays?: number) {
+  if (data.length === 0) return
+  if (!visibleDays) {
+    chart.timeScale().fitContent()
+    return
+  }
+  const lastDate = data[data.length - 1].time as string
+  const end = new Date(lastDate + 'T00:00:00Z')
+  const start = new Date(end)
+  start.setDate(start.getDate() - visibleDays)
+  chart.timeScale().setVisibleRange({
+    from: (start.getTime() / 1000) as UTCTimestamp,
+    to: (end.getTime() / 1000) as UTCTimestamp,
+  })
+}
+
+export default function PriceChart({ data, visibleDays, height = 320, className }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
 
@@ -34,7 +51,6 @@ export default function PriceChart({ data, height = 320, className }: Props) {
     })
     chartRef.current = chart
 
-    // Area series for the avg price with filled background
     const areaSeries = chart.addSeries(AreaSeries, {
       lineColor: '#22c55e',
       topColor: 'rgba(34, 197, 94, 0.25)',
@@ -42,20 +58,18 @@ export default function PriceChart({ data, height = 320, className }: Props) {
       lineWidth: 2,
     })
 
-    // High price line (subtle)
     const highSeries = chart.addSeries(LineSeries, {
       color: 'rgba(34, 197, 94, 0.35)',
       lineWidth: 1,
-      lineStyle: 2, // dashed
+      lineStyle: 2,
       lastValueVisible: false,
       priceLineVisible: false,
     })
 
-    // Low price line (subtle)
     const lowSeries = chart.addSeries(LineSeries, {
       color: 'rgba(239, 68, 68, 0.35)',
       lineWidth: 1,
-      lineStyle: 2, // dashed
+      lineStyle: 2,
       lastValueVisible: false,
       priceLineVisible: false,
     })
@@ -64,7 +78,7 @@ export default function PriceChart({ data, height = 320, className }: Props) {
       areaSeries.setData(data.map((d) => ({ time: d.time, value: d.close })))
       highSeries.setData(data.map((d) => ({ time: d.time, value: d.high })))
       lowSeries.setData(data.map((d) => ({ time: d.time, value: d.low })))
-      chart.timeScale().fitContent()
+      applyVisibleRange(chart, data, visibleDays)
     }
 
     const handleResize = () => {
@@ -80,7 +94,14 @@ export default function PriceChart({ data, height = 320, className }: Props) {
       chart.remove()
       chartRef.current = null
     }
-  }, [data, height])
+  }, [data, height]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Update visible range when period changes without recreating the chart
+  useEffect(() => {
+    const chart = chartRef.current
+    if (!chart) return
+    applyVisibleRange(chart, data, visibleDays)
+  }, [visibleDays, data])
 
   return <div ref={containerRef} className={`w-full rounded-lg overflow-hidden ${className ?? ''}`} style={height !== undefined ? { height } : { height: '100%' }} />
 }

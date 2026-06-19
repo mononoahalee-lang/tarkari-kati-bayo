@@ -97,10 +97,10 @@ export default function ChartExplorer({ vegetables, markets, locale }: Props) {
 
   const selected = useMemo(() => vegetables.find((v) => v.id === selectedId) ?? null, [vegetables, selectedId])
 
-  const fetchChart = useCallback(async (id: string, p: Period, marketId: string) => {
+  const fetchChart = useCallback(async (id: string, marketId: string) => {
     setLoading(true)
     try {
-      const params = new URLSearchParams({ days: String(PERIOD_DAYS[p]) })
+      const params = new URLSearchParams({ days: '1095' })
       if (marketId !== 'all') params.set('marketId', marketId)
       const res = await fetch(`/api/vegetables/${id}/history?${params}`)
       if (!res.ok) return
@@ -113,8 +113,8 @@ export default function ChartExplorer({ vegetables, markets, locale }: Props) {
   }, [])
 
   useEffect(() => {
-    if (selectedId) fetchChart(selectedId, period, selectedMarketId)
-  }, [selectedId, period, selectedMarketId, fetchChart])
+    if (selectedId) fetchChart(selectedId, selectedMarketId)
+  }, [selectedId, selectedMarketId, fetchChart])
 
   useEffect(() => {
     if (!selectedId) return
@@ -127,6 +127,24 @@ export default function ChartExplorer({ vegetables, markets, locale }: Props) {
   }, [selectedId])
 
   const changePct = selected?.changePct
+
+  // Compute stats for the currently visible period
+  const periodStats = useMemo(() => {
+    if (candlesticks.length === 0) return null
+    const cutoff = new Date()
+    cutoff.setDate(cutoff.getDate() - PERIOD_DAYS[period])
+    const cutoffStr = cutoff.toISOString().split('T')[0]
+    const visible = candlesticks.filter((c) => (c.time as string) >= cutoffStr)
+    const source = visible.length >= 2 ? visible : candlesticks
+    const highs = source.map((c) => c.high)
+    const lows = source.map((c) => c.low)
+    const avgs = source.map((c) => c.close)
+    return {
+      high: Math.max(...highs),
+      low: Math.min(...lows),
+      avg: avgs.reduce((a, b) => a + b, 0) / avgs.length,
+    }
+  }, [candlesticks, period])
 
   // When a specific market is selected, show that market's price instead of all-markets average
   const selectedMarketPrice = selectedMarketId !== 'all'
@@ -261,7 +279,7 @@ export default function ChartExplorer({ vegetables, markets, locale }: Props) {
               {loading ? (
                 <div className="flex h-full items-center justify-center text-zinc-400 text-sm">{ui.loading}</div>
               ) : candlesticks.length > 0 ? (
-                <PriceChart data={candlesticks} height={undefined} className="h-full" />
+                <PriceChart data={candlesticks} visibleDays={PERIOD_DAYS[period]} height={undefined} className="h-full" />
               ) : (
                 <div className="flex h-full flex-col items-center justify-center gap-3 text-zinc-400 text-sm text-center px-8">
                   <span className="text-4xl">📊</span>
@@ -279,12 +297,12 @@ export default function ChartExplorer({ vegetables, markets, locale }: Props) {
             </div>
 
             {/* Stats */}
-            {stats && (
+            {(periodStats ?? stats) && (
               <div className="grid grid-cols-3 gap-3 shrink-0">
                 {[
-                  { label: ui.high, value: stats.high.toFixed(2), color: 'text-green-400' },
-                  { label: ui.avg, value: stats.avg.toFixed(2), color: 'text-white' },
-                  { label: ui.low, value: stats.low.toFixed(2), color: 'text-red-400' },
+                  { label: ui.high, value: (periodStats ?? stats)!.high.toFixed(2), color: 'text-green-400' },
+                  { label: ui.avg, value: (periodStats ?? stats)!.avg.toFixed(2), color: 'text-white' },
+                  { label: ui.low, value: (periodStats ?? stats)!.low.toFixed(2), color: 'text-red-400' },
                 ].map(({ label, value, color }) => (
                   <div key={label} className="rounded-lg border border-zinc-700 bg-zinc-800 p-3 text-center">
                     <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide">{label}</p>
