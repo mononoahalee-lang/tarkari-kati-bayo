@@ -22,14 +22,13 @@ type MarketItem = {
   nameNe: string
 }
 
-type Period = '1W' | '1M' | '3M' | '1Y' | '3Y'
-const PERIOD_DAYS: Record<Period, number> = { '1W': 7, '1M': 30, '3M': 90, '1Y': 365, '3Y': 1095 }
+type Period = '1W' | '1M' | '3M' | '1Y'
+const PERIOD_DAYS: Record<Period, number> = { '1W': 7, '1M': 30, '3M': 90, '1Y': 365 }
 const PERIOD_LABELS: Record<Period, Record<Locale, string>> = {
-  '1W': { ne: '१ हप्ता', en: '1W', ja: '1週' },
-  '1M': { ne: '१ महिना', en: '1M', ja: '1ヶ月' },
+  '1W': { ne: 'दैनिक', en: 'Daily', ja: '日次' },
+  '1M': { ne: 'मासिक', en: 'Monthly', ja: '月次' },
   '3M': { ne: '३ महिना', en: '3M', ja: '3ヶ月' },
   '1Y': { ne: '१ वर्ष', en: '1Y', ja: '1年' },
-  '3Y': { ne: '३ वर्ष', en: '3Y', ja: '3年' },
 }
 
 const UI: Record<Locale, {
@@ -75,7 +74,7 @@ export default function ChartExplorer({ vegetables, markets, locale }: Props) {
   const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(vegetables[0]?.id ?? null)
   const [selectedMarketId, setSelectedMarketId] = useState<string>('all')
-  const [period, setPeriod] = useState<Period>('1M')
+  const [period, setPeriod] = useState<Period>('1Y')
   const [candlesticks, setCandlesticks] = useState<CandlestickPoint[]>([])
   const [stats, setStats] = useState<{ high: number; low: number; avg: number } | null>(null)
   const [loading, setLoading] = useState(false)
@@ -128,10 +127,11 @@ export default function ChartExplorer({ vegetables, markets, locale }: Props) {
 
   const changePct = selected?.changePct
 
-  // Compute stats for the currently visible period
+  // Compute stats for the currently visible period (relative to last data point)
   const periodStats = useMemo(() => {
     if (candlesticks.length === 0) return null
-    const cutoff = new Date()
+    const lastDate = new Date(candlesticks[candlesticks.length - 1].time as string + 'T00:00:00Z')
+    const cutoff = new Date(lastDate)
     cutoff.setDate(cutoff.getDate() - PERIOD_DAYS[period])
     const cutoffStr = cutoff.toISOString().split('T')[0]
     const visible = candlesticks.filter((c) => (c.time as string) >= cutoffStr)
