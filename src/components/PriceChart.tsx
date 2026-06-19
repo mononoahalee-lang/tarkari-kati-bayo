@@ -17,10 +17,20 @@ function applyVisibleRange(chart: IChartApi, data: CandlestickPoint[], visibleDa
     chart.timeScale().fitContent()
     return
   }
-  const lastDate = data[data.length - 1].time as string
-  const end = new Date(lastDate + 'T00:00:00Z')
+  // Use today as the end so period buttons always show the most recent N days.
+  // If the visible range contains no data, fall back to showing all available data.
+  const end = new Date()
   const start = new Date(end)
   start.setDate(start.getDate() - visibleDays)
+  const endStr = end.toISOString().split('T')[0]
+  const startStr = start.toISOString().split('T')[0]
+  const hasDataInRange = data.some(
+    (d) => (d.time as string) >= startStr && (d.time as string) <= endStr
+  )
+  if (!hasDataInRange) {
+    chart.timeScale().fitContent()
+    return
+  }
   chart.timeScale().setVisibleRange({
     from: (start.getTime() / 1000) as UTCTimestamp,
     to: (end.getTime() / 1000) as UTCTimestamp,
