@@ -25,7 +25,7 @@ type MarketItem = {
 type Period = '1W' | '1M' | '3M' | '1Y'
 const PERIOD_DAYS: Record<Period, number> = { '1W': 7, '1M': 30, '3M': 90, '1Y': 365 }
 const PERIOD_LABELS: Record<Period, Record<Locale, string>> = {
-  '1W': { ne: 'दैनिक', en: 'Daily', ja: '日次' },
+  '1W': { ne: 'साप्ताहिक', en: 'Weekly', ja: '週次' },
   '1M': { ne: 'मासिक', en: 'Monthly', ja: '月次' },
   '3M': { ne: '३ महिना', en: '3M', ja: '3ヶ月' },
   '1Y': { ne: '१ वर्ष', en: '1Y', ja: '1年' },
