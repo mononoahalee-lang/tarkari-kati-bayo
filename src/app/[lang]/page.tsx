@@ -332,7 +332,7 @@ export default async function HomePage({
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((row, i) => (
+                  {withData.map((row, i) => (
                     <tr
                       key={row.id}
                       className={`border-b border-zinc-800/50 hover:bg-zinc-800/50 transition-colors ${

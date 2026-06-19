@@ -83,16 +83,18 @@ export default function ChartExplorer({ vegetables, markets, locale }: Props) {
     district: string; minPrice: number; maxPrice: number; avgPrice: number; date: string
   }>>([])
   const [loadingMarkets, setLoadingMarkets] = useState(false)
+  const [marketVegIds, setMarketVegIds] = useState<Set<string> | null>(null)
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase()
     return vegetables.filter(
       (v) =>
-        v.nameNe.toLowerCase().includes(q) ||
-        v.nameEn.toLowerCase().includes(q) ||
-        v.nameJa.toLowerCase().includes(q)
+        (marketVegIds === null || marketVegIds.has(v.id)) &&
+        (v.nameNe.toLowerCase().includes(q) ||
+          v.nameEn.toLowerCase().includes(q) ||
+          v.nameJa.toLowerCase().includes(q))
     )
-  }, [vegetables, query])
+  }, [vegetables, query, marketVegIds])
 
   const selected = useMemo(() => vegetables.find((v) => v.id === selectedId) ?? null, [vegetables, selectedId])
 
@@ -114,6 +116,26 @@ export default function ChartExplorer({ vegetables, markets, locale }: Props) {
   useEffect(() => {
     if (selectedId) fetchChart(selectedId, selectedMarketId)
   }, [selectedId, selectedMarketId, fetchChart])
+
+  // Fetch vegetable IDs available in the selected market
+  useEffect(() => {
+    if (selectedMarketId === 'all') {
+      setMarketVegIds(null)
+      return
+    }
+    fetch(`/api/markets/${selectedMarketId}/vegetables`)
+      .then((r) => r.json())
+      .then((data) => {
+        const ids = new Set<string>(data.vegetableIds ?? [])
+        setMarketVegIds(ids)
+        // If the currently selected vegetable has no data in this market, pick the first available
+        if (selectedId && !ids.has(selectedId)) {
+          const first = vegetables.find((v) => ids.has(v.id))
+          setSelectedId(first?.id ?? null)
+        }
+      })
+      .catch(() => setMarketVegIds(null))
+  }, [selectedMarketId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!selectedId) return
