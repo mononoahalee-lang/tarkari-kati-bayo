@@ -84,6 +84,7 @@ export default function ChartExplorer({ vegetables, markets, locale }: Props) {
   }>>([])
   const [loadingMarkets, setLoadingMarkets] = useState(false)
   const [marketVegIds, setMarketVegIds] = useState<Set<string> | null>(null)
+  const [marketPriceMap, setMarketPriceMap] = useState<Record<string, { avgPrice: number; changePct: number | null }> | null>(null)
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase()
@@ -121,6 +122,7 @@ export default function ChartExplorer({ vegetables, markets, locale }: Props) {
   useEffect(() => {
     if (selectedMarketId === 'all') {
       setMarketVegIds(null)
+      setMarketPriceMap(null)
       return
     }
     fetch(`/api/markets/${selectedMarketId}/vegetables`)
@@ -128,13 +130,14 @@ export default function ChartExplorer({ vegetables, markets, locale }: Props) {
       .then((data) => {
         const ids = new Set<string>(data.vegetableIds ?? [])
         setMarketVegIds(ids)
+        setMarketPriceMap(data.prices ?? null)
         // If the currently selected vegetable has no data in this market, pick the first available
         if (selectedId && !ids.has(selectedId)) {
           const first = vegetables.find((v) => ids.has(v.id))
           setSelectedId(first?.id ?? null)
         }
       })
-      .catch(() => setMarketVegIds(null))
+      .catch(() => { setMarketVegIds(null); setMarketPriceMap(null) })
   }, [selectedMarketId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -200,7 +203,10 @@ export default function ChartExplorer({ vegetables, markets, locale }: Props) {
         <div className="flex-1 overflow-y-auto">
           {filtered.map((v) => {
             const isSelected = v.id === selectedId
-            const pct = v.changePct
+            // Use market-specific price when a market is selected, else fall back to all-markets price
+            const mktData = marketPriceMap?.[v.id]
+            const displayAvg = mktData?.avgPrice ?? v.avgPrice
+            const pct = mktData?.changePct ?? v.changePct
             return (
               <button
                 key={v.id}
@@ -215,10 +221,10 @@ export default function ChartExplorer({ vegetables, markets, locale }: Props) {
                   {getName(v, locale)}
                 </span>
                 <div className="flex flex-col items-end ml-2 shrink-0">
-                  {v.avgPrice !== null && (
-                    <span className="font-mono text-sm font-semibold text-white">{v.avgPrice.toFixed(0)}</span>
+                  {displayAvg !== null && displayAvg !== undefined && (
+                    <span className="font-mono text-sm font-semibold text-white">{displayAvg.toFixed(0)}</span>
                   )}
-                  {pct !== null && (
+                  {pct !== null && pct !== undefined && (
                     <span className={`font-mono text-xs font-medium ${pct >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                       {pct >= 0 ? '+' : ''}{pct.toFixed(1)}%
                     </span>
