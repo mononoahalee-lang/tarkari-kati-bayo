@@ -132,7 +132,8 @@ async function getSeasonData(id: string) {
 
 async function getAIComment(id: string) {
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ??
+      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
     const res = await fetch(`${baseUrl}/api/ai/comment?vegetableId=${id}`, {
       next: { revalidate: 86400 },
     })
