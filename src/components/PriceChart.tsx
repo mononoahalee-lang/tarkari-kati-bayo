@@ -63,17 +63,18 @@ export default function PriceChart({ data, visibleDays, height = 320, className 
         tickMarkFormatter: (time: UTCTimestamp, tickMarkType: TickMarkType) => {
           // TradingView converts "YYYY-MM-DD" strings to BusinessDay objects {year,month,day}
           // before calling this formatter, so we must handle all three possible types.
+          const t = time as unknown
           let y: string, mo: string, d: string
-          if (typeof time === 'number') {
-            const dt = new Date(time * 1000)
+          if (typeof t === 'number') {
+            const dt = new Date(t * 1000)
             y = String(dt.getUTCFullYear())
             mo = String(dt.getUTCMonth() + 1).padStart(2, '0')
             d = String(dt.getUTCDate()).padStart(2, '0')
-          } else if (typeof time === 'string') {
-            ;[y, mo, d] = time.split('-')
+          } else if (typeof t === 'string') {
+            ;[y, mo, d] = t.split('-')
           } else {
             // BusinessDay: { year: number; month: number; day: number }
-            const bd = time as unknown as { year: number; month: number; day: number }
+            const bd = t as { year: number; month: number; day: number }
             y = String(bd.year)
             mo = String(bd.month).padStart(2, '0')
             d = String(bd.day).padStart(2, '0')
