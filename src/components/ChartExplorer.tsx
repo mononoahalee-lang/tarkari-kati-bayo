@@ -128,12 +128,14 @@ export default function ChartExplorer({ vegetables, markets, locale }: Props) {
     fetch(`/api/markets/${selectedMarketId}/vegetables`)
       .then((r) => r.json())
       .then((data) => {
-        const ids = new Set<string>(data.vegetableIds ?? [])
-        setMarketVegIds(ids)
-        setMarketPriceMap(data.prices ?? null)
+        const priceMap: Record<string, { avgPrice: number; changePct: number | null }> = data.prices ?? {}
+        // Only show vegetables that have data on the latest date for this market
+        const idsWithData = new Set<string>(Object.keys(priceMap))
+        setMarketVegIds(idsWithData)
+        setMarketPriceMap(priceMap)
         // If the currently selected vegetable has no data in this market, pick the first available
-        if (selectedId && !ids.has(selectedId)) {
-          const first = vegetables.find((v) => ids.has(v.id))
+        if (selectedId && !idsWithData.has(selectedId)) {
+          const first = vegetables.find((v) => idsWithData.has(v.id))
           setSelectedId(first?.id ?? null)
         }
       })

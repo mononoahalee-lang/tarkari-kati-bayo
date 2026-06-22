@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { createChart, AreaSeries, LineSeries, type IChartApi, type UTCTimestamp } from 'lightweight-charts'
+import { createChart, AreaSeries, LineSeries, TickMarkType, type IChartApi, type UTCTimestamp } from 'lightweight-charts'
 import type { CandlestickPoint } from '@/types'
 
 interface Props {
@@ -57,7 +57,19 @@ export default function PriceChart({ data, visibleDays, height = 320, className 
       },
       crosshair: { mode: 1 },
       rightPriceScale: { borderColor: '#3f3f46' },
-      timeScale: { borderColor: '#3f3f46', timeVisible: true },
+      timeScale: {
+        borderColor: '#3f3f46',
+        timeVisible: true,
+        tickMarkFormatter: (time: UTCTimestamp, tickMarkType: TickMarkType) => {
+          const d = new Date((time as number) * 1000)
+          const y = d.getUTCFullYear()
+          const m = String(d.getUTCMonth() + 1).padStart(2, '0')
+          const day = String(d.getUTCDate()).padStart(2, '0')
+          if (tickMarkType === TickMarkType.Year) return `${y}`
+          if (tickMarkType === TickMarkType.Month) return `${y}/${m}`
+          return `${m}/${day}`
+        },
+      },
     })
     chartRef.current = chart
 
