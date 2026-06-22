@@ -83,6 +83,7 @@ export default function ChartExplorer({ vegetables, markets, locale }: Props) {
     district: string; minPrice: number; maxPrice: number; avgPrice: number; date: string
   }>>([])
   const [loadingMarkets, setLoadingMarkets] = useState(false)
+  const [mobileListOpen, setMobileListOpen] = useState(false)
   const [marketVegIds, setMarketVegIds] = useState<Set<string> | null>(null)
   const [marketPriceMap, setMarketPriceMap] = useState<Record<string, { avgPrice: number; changePct: number | null }> | null>(null)
 
@@ -188,72 +189,105 @@ export default function ChartExplorer({ vegetables, markets, locale }: Props) {
     ? ui.allMarkets
     : (markets.find((m) => m.id === selectedMarketId)?.nameEn ?? ui.allMarkets)
 
+  // Shared vegetable list content
+  const vegListContent = (
+    <>
+      <div className="p-3 border-b border-zinc-700">
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={ui.search}
+          className="w-full rounded-md bg-zinc-800 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-400 outline-none focus:ring-1 focus:ring-green-500"
+        />
+        <p className="mt-1.5 text-xs text-zinc-400">{filtered.length} items</p>
+      </div>
+      <div className="flex-1 overflow-y-auto">
+        {filtered.map((v) => {
+          const isSelected = v.id === selectedId
+          const mktData = marketPriceMap?.[v.id]
+          const displayAvg = mktData?.avgPrice ?? v.avgPrice
+          const pct = mktData?.changePct ?? v.changePct
+          return (
+            <button
+              key={v.id}
+              onClick={() => { setSelectedId(v.id); setMobileListOpen(false) }}
+              className={`w-full flex items-center justify-between px-3 py-2.5 text-left text-sm transition-colors border-b border-zinc-800 ${
+                isSelected
+                  ? 'bg-green-900/40 border-l-2 border-l-green-400'
+                  : 'hover:bg-zinc-800'
+              }`}
+            >
+              <span className={`truncate font-medium ${isSelected ? 'text-white' : 'text-zinc-100'}`}>
+                {getName(v, locale)}
+              </span>
+              <div className="flex flex-col items-end ml-2 shrink-0">
+                {displayAvg !== null && displayAvg !== undefined && (
+                  <span className="font-mono text-sm font-semibold text-white">{displayAvg.toFixed(0)}</span>
+                )}
+                {pct !== null && pct !== undefined && (
+                  <span className={`font-mono text-xs font-medium ${pct >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {pct >= 0 ? '+' : ''}{pct.toFixed(1)}%
+                  </span>
+                )}
+              </div>
+            </button>
+          )
+        })}
+      </div>
+    </>
+  )
+
   return (
     <div className="flex flex-col lg:flex-row gap-0 h-[calc(100vh-8rem)]">
-      {/* Left: vegetable list */}
-      <div className="lg:w-72 xl:w-80 flex flex-col border-b lg:border-b-0 lg:border-r border-zinc-700 overflow-hidden bg-zinc-900">
-        <div className="p-3 border-b border-zinc-700">
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={ui.search}
-            className="w-full rounded-md bg-zinc-800 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-400 outline-none focus:ring-1 focus:ring-green-500"
-          />
-          <p className="mt-1.5 text-xs text-zinc-400">{filtered.length} items</p>
+      {/* Mobile: drawer overlay */}
+      {mobileListOpen && (
+        <div className="lg:hidden fixed inset-0 z-50 flex">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setMobileListOpen(false)} />
+          <div className="relative z-10 flex flex-col w-80 max-w-[85vw] bg-zinc-900 border-r border-zinc-700 h-full">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-700">
+              <span className="text-sm font-semibold text-zinc-200">{ui.search}</span>
+              <button onClick={() => setMobileListOpen(false)} className="text-zinc-400 hover:text-white text-xl leading-none">✕</button>
+            </div>
+            {vegListContent}
+          </div>
         </div>
-        <div className="flex-1 overflow-y-auto">
-          {filtered.map((v) => {
-            const isSelected = v.id === selectedId
-            // Use market-specific price when a market is selected, else fall back to all-markets price
-            const mktData = marketPriceMap?.[v.id]
-            const displayAvg = mktData?.avgPrice ?? v.avgPrice
-            const pct = mktData?.changePct ?? v.changePct
-            return (
-              <button
-                key={v.id}
-                onClick={() => setSelectedId(v.id)}
-                className={`w-full flex items-center justify-between px-3 py-2.5 text-left text-sm transition-colors border-b border-zinc-800 ${
-                  isSelected
-                    ? 'bg-green-900/40 border-l-2 border-l-green-400'
-                    : 'hover:bg-zinc-800'
-                }`}
-              >
-                <span className={`truncate font-medium ${isSelected ? 'text-white' : 'text-zinc-100'}`}>
-                  {getName(v, locale)}
-                </span>
-                <div className="flex flex-col items-end ml-2 shrink-0">
-                  {displayAvg !== null && displayAvg !== undefined && (
-                    <span className="font-mono text-sm font-semibold text-white">{displayAvg.toFixed(0)}</span>
-                  )}
-                  {pct !== null && pct !== undefined && (
-                    <span className={`font-mono text-xs font-medium ${pct >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {pct >= 0 ? '+' : ''}{pct.toFixed(1)}%
-                    </span>
-                  )}
-                </div>
-              </button>
-            )
-          })}
-        </div>
+      )}
+
+      {/* Desktop: left sidebar */}
+      <div className="hidden lg:flex lg:w-72 xl:w-80 flex-col border-r border-zinc-700 overflow-hidden bg-zinc-900">
+        {vegListContent}
       </div>
 
       {/* Right: chart panel */}
-      <div className="flex-1 flex flex-col overflow-hidden p-4 gap-3 min-h-0">
+      <div className="flex-1 flex flex-col overflow-hidden p-3 sm:p-4 gap-3 min-h-0">
+        {/* Mobile: select vegetable button */}
+        <div className="lg:hidden shrink-0">
+          <button
+            onClick={() => setMobileListOpen(true)}
+            className="w-full flex items-center justify-between rounded-lg bg-zinc-800 border border-zinc-700 px-4 py-2.5 text-sm"
+          >
+            <span className="text-zinc-100 font-medium truncate">
+              {selected ? getName(selected, locale) : ui.select}
+            </span>
+            <span className="text-zinc-400 ml-2 shrink-0">▼ {filtered.length} items</span>
+          </button>
+        </div>
+
         {selected ? (
           <>
             {/* Header */}
-            <div className="flex items-start justify-between gap-4 shrink-0">
-              <div>
-                <h1 className="text-2xl font-bold text-white">{getName(selected, locale)}</h1>
-                <p className="text-sm text-zinc-400 mt-0.5">
+            <div className="flex items-start justify-between gap-2 sm:gap-4 shrink-0">
+              <div className="min-w-0">
+                <h1 className="text-xl sm:text-2xl font-bold text-white truncate">{getName(selected, locale)}</h1>
+                <p className="text-xs sm:text-sm text-zinc-400 mt-0.5">
                   {locale === 'ne' ? selected.nameEn : selected.nameNe} · NPR/{selected.unit}
                 </p>
               </div>
               <div className="text-right shrink-0">
                 {displayPrice !== null && (
                   <>
-                    <p className="text-3xl font-bold font-mono text-white">
+                    <p className="text-2xl sm:text-3xl font-bold font-mono text-white">
                       {displayPrice.toFixed(2)}
                     </p>
                     <p className="text-xs text-zinc-500 mt-0.5">{displaySubLabel}</p>
@@ -271,13 +305,13 @@ export default function ChartExplorer({ vegetables, markets, locale }: Props) {
             </div>
 
             {/* Controls: period + market */}
-            <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
               <div className="flex gap-1">
                 {(Object.keys(PERIOD_DAYS) as Period[]).map((p) => (
                   <button
                     key={p}
                     onClick={() => setPeriod(p)}
-                    className={`rounded px-4 py-1.5 text-sm font-semibold transition-colors ${
+                    className={`rounded px-2.5 sm:px-4 py-1.5 text-xs sm:text-sm font-semibold transition-colors ${
                       p === period
                         ? 'bg-green-600 text-white'
                         : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white'
@@ -287,12 +321,11 @@ export default function ChartExplorer({ vegetables, markets, locale }: Props) {
                   </button>
                 ))}
               </div>
-
               <div className="ml-auto">
                 <select
                   value={selectedMarketId}
                   onChange={(e) => setSelectedMarketId(e.target.value)}
-                  className="rounded-md bg-zinc-800 border border-zinc-600 px-3 py-1.5 text-sm text-zinc-100 font-medium outline-none focus:ring-1 focus:ring-green-500 cursor-pointer"
+                  className="rounded-md bg-zinc-800 border border-zinc-600 px-2 sm:px-3 py-1.5 text-xs sm:text-sm text-zinc-100 font-medium outline-none focus:ring-1 focus:ring-green-500 cursor-pointer max-w-[140px] sm:max-w-none"
                 >
                   <option value="all">{ui.allMarkets}</option>
                   {markets.map((m) => (

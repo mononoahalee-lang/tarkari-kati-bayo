@@ -247,37 +247,36 @@ export default async function HomePage({
           <div className="rounded-lg border border-zinc-800 bg-zinc-900 overflow-hidden">
             {/* Market filter tabs */}
             <div className="px-4 pt-3 pb-0 border-b border-zinc-800">
-              <div className="flex items-center justify-between gap-2 flex-wrap pb-3">
-                <h2 className="text-sm font-semibold text-zinc-300">{dict.home.allVegetables}</h2>
-                <div className="flex flex-wrap gap-1.5">
-                  {/* All Markets tab */}
+              <div className="flex items-center justify-between gap-2 pb-2">
+                <h2 className="text-sm font-semibold text-zinc-300 shrink-0">{dict.home.allVegetables}</h2>
+              </div>
+              {/* Horizontally scrollable market tabs */}
+              <div className="flex gap-1.5 overflow-x-auto pb-2 scrollbar-none">
+                <Link
+                  href={`/${locale}`}
+                  className={`shrink-0 rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                    !selectedMarketId
+                      ? 'bg-zinc-600 text-white'
+                      : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200'
+                  }`}
+                >
+                  {locale === 'ne' ? 'सबै' : locale === 'ja' ? '全市場' : 'All'}
+                </Link>
+                {markets.map((m) => (
                   <Link
-                    href={`/${locale}`}
-                    className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
-                      !selectedMarketId
-                        ? 'bg-zinc-600 text-white'
+                    key={m.id}
+                    href={`/${locale}?marketId=${m.id}`}
+                    className={`shrink-0 rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                      selectedMarketId === m.id
+                        ? m.source === 'kalimati'
+                          ? 'bg-green-600 text-white'
+                          : 'bg-blue-600 text-white'
                         : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200'
                     }`}
                   >
-                    {locale === 'ne' ? 'सबै' : locale === 'ja' ? '全市場' : 'All'}
+                    {locale === 'ne' ? m.nameNe : m.nameEn}
                   </Link>
-                  {/* Per-market tabs */}
-                  {markets.map((m) => (
-                    <Link
-                      key={m.id}
-                      href={`/${locale}?marketId=${m.id}`}
-                      className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
-                        selectedMarketId === m.id
-                          ? m.source === 'kalimati'
-                            ? 'bg-green-600 text-white'
-                            : 'bg-blue-600 text-white'
-                          : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200'
-                      }`}
-                    >
-                      {locale === 'ne' ? m.nameNe : m.nameEn}
-                    </Link>
-                  ))}
-                </div>
+                ))}
               </div>
               {selectedMarket && (
                 <p className="pb-2 text-xs text-zinc-500">
@@ -302,8 +301,8 @@ export default async function HomePage({
                     <th className="px-4 py-2 text-left">
                       {locale === 'ne' ? 'नाम' : locale === 'ja' ? '野菜' : 'Vegetable'}
                     </th>
-                    <th className="px-4 py-2 text-right">{dict.price.min}</th>
-                    <th className="px-4 py-2 text-right">{dict.price.max}</th>
+                    <th className="hidden sm:table-cell px-4 py-2 text-right">{dict.price.min}</th>
+                    <th className="hidden sm:table-cell px-4 py-2 text-right">{dict.price.max}</th>
                     <th className="px-4 py-2 text-right">{dict.price.avg}</th>
                     <th className="px-4 py-2 text-right">{dict.price.change}</th>
                   </tr>
@@ -325,10 +324,10 @@ export default async function HomePage({
                         </Link>
                         <span className="ml-1 text-xs text-zinc-600">/{row.unit}</span>
                       </td>
-                      <td className="px-4 py-2 text-right font-mono text-zinc-400">
+                      <td className="hidden sm:table-cell px-4 py-2 text-right font-mono text-zinc-400">
                         {row.minPrice !== null ? row.minPrice.toFixed(0) : '—'}
                       </td>
-                      <td className="px-4 py-2 text-right font-mono text-zinc-400">
+                      <td className="hidden sm:table-cell px-4 py-2 text-right font-mono text-zinc-400">
                         {row.maxPrice !== null ? row.maxPrice.toFixed(0) : '—'}
                       </td>
                       <td className="px-4 py-2 text-right font-mono text-zinc-100">

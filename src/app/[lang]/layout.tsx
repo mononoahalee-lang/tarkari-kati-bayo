@@ -46,14 +46,14 @@ export default async function LangLayout({
               <span className="text-lg font-bold text-green-400">🥬</span>
               <span className="text-sm font-semibold tracking-tight text-zinc-100">Tarkari Kati Bayo</span>
             </Link>
-            <nav className="flex items-center gap-4 text-sm">
-              <Link href={`/${locale}`} className="text-zinc-200 hover:text-white transition-colors">
+            <nav className="flex items-center gap-2 sm:gap-4 text-sm">
+              <Link href={`/${locale}`} className="text-zinc-200 hover:text-white transition-colors px-1">
                 {dict.nav.home}
               </Link>
-              <Link href={`/${locale}/chart`} className="text-zinc-200 hover:text-white transition-colors">
+              <Link href={`/${locale}/chart`} className="text-zinc-200 hover:text-white transition-colors px-1">
                 {dict.nav.chart}
               </Link>
-              <Link href={`/${locale}/news`} className="text-zinc-200 hover:text-white transition-colors">
+              <Link href={`/${locale}/news`} className="hidden sm:block text-zinc-200 hover:text-white transition-colors px-1">
                 {dict.nav.news}
               </Link>
               <div className="flex gap-1 rounded-md border border-zinc-700 p-0.5">
