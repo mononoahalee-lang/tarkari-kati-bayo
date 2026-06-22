@@ -61,14 +61,26 @@ export default function PriceChart({ data, visibleDays, height = 320, className 
         borderColor: '#3f3f46',
         timeVisible: true,
         tickMarkFormatter: (time: UTCTimestamp, tickMarkType: TickMarkType) => {
-          // time is a "YYYY-MM-DD" string when chart uses string-based time
-          const dateStr = typeof time === 'string'
-            ? time
-            : new Date((time as number) * 1000).toISOString().split('T')[0]
-          const [y, m, day] = dateStr.split('-')
+          // TradingView converts "YYYY-MM-DD" strings to BusinessDay objects {year,month,day}
+          // before calling this formatter, so we must handle all three possible types.
+          let y: string, mo: string, d: string
+          if (typeof time === 'number') {
+            const dt = new Date(time * 1000)
+            y = String(dt.getUTCFullYear())
+            mo = String(dt.getUTCMonth() + 1).padStart(2, '0')
+            d = String(dt.getUTCDate()).padStart(2, '0')
+          } else if (typeof time === 'string') {
+            ;[y, mo, d] = time.split('-')
+          } else {
+            // BusinessDay: { year: number; month: number; day: number }
+            const bd = time as unknown as { year: number; month: number; day: number }
+            y = String(bd.year)
+            mo = String(bd.month).padStart(2, '0')
+            d = String(bd.day).padStart(2, '0')
+          }
           if (tickMarkType === TickMarkType.Year) return y
-          if (tickMarkType === TickMarkType.Month) return `${y}/${m}`
-          return `${m}/${day}`
+          if (tickMarkType === TickMarkType.Month) return `${y}/${mo}`
+          return `${mo}/${d}`
         },
       },
     })
