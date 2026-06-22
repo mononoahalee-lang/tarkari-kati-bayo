@@ -12,39 +12,24 @@ async function getVegetablesWithPrice() {
     orderBy: { nameEn: 'asc' },
   })
 
-  const latestDates = await prisma.priceRecord.findMany({
-    distinct: ['date'],
-    orderBy: { date: 'desc' },
-    take: 30,
-    select: { date: true },
-  })
-
-  if (latestDates.length === 0) {
-    return vegetables.map((v) => ({ ...v, avgPrice: null, changePct: null }))
-  }
-
-  const latestDate = latestDates[0]
-  const sevenDaysAgo = new Date(latestDate.date)
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-  const prevDate = latestDates.find((d) => d.date <= sevenDaysAgo) ?? latestDates[1]
-
-  const [latestRecords, prevRecords] = await Promise.all([
-    prisma.priceRecord.groupBy({
-      by: ['vegetableId'],
-      where: { date: latestDate.date },
-      _avg: { avgPrice: true },
+  // Get the most recent price per vegetable individually (handles different scrape dates per market)
+  const [latestPerVeg, prevPerVeg] = await Promise.all([
+    prisma.priceRecord.findMany({
+      distinct: ['vegetableId'],
+      orderBy: [{ vegetableId: 'asc' }, { date: 'desc' }],
+      select: { vegetableId: true, avgPrice: true },
     }),
-    prevDate
-      ? prisma.priceRecord.groupBy({
-          by: ['vegetableId'],
-          where: { date: prevDate.date },
-          _avg: { avgPrice: true },
-        })
-      : Promise.resolve([]),
+    // Most recent price that is at least 7 days before today for comparison
+    prisma.priceRecord.findMany({
+      distinct: ['vegetableId'],
+      orderBy: [{ vegetableId: 'asc' }, { date: 'desc' }],
+      where: { date: { lte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
+      select: { vegetableId: true, avgPrice: true },
+    }),
   ])
 
-  const latestMap = new Map(latestRecords.map((r) => [r.vegetableId, r._avg.avgPrice]))
-  const prevMap = new Map(prevRecords.map((r) => [r.vegetableId, r._avg.avgPrice]))
+  const latestMap = new Map(latestPerVeg.map((r) => [r.vegetableId, r.avgPrice]))
+  const prevMap = new Map(prevPerVeg.map((r) => [r.vegetableId, r.avgPrice]))
 
   return vegetables.map((v) => {
     const avg = latestMap.get(v.id) ?? null

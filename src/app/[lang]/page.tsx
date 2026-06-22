@@ -52,64 +52,41 @@ async function getPriceRows(marketId?: string): Promise<VegRow[]> {
   if (vegetables.length === 0) return []
 
   const whereFilter = marketId ? { marketId } : {}
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
 
-  const latestDates = await prisma.priceRecord.findMany({
-    distinct: ['date'],
-    orderBy: { date: 'desc' },
-    take: 30,
-    select: { date: true },
-    where: whereFilter,
-  })
-
-  if (latestDates.length === 0)
-    return vegetables.map((v) => ({ ...v, avgPrice: null, minPrice: null, maxPrice: null, changePct: null, date: null }))
-
-  const latestDate = latestDates[0]
-  // Prefer a comparison date 7+ days ago for meaningful change data; fall back to previous day
-  const sevenDaysAgo = new Date(latestDate.date)
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-  const prevDate = latestDates.find((d) => d.date <= sevenDaysAgo) ?? latestDates[1]
-
-  const [latestRecords, prevRecords] = await Promise.all([
-    prisma.priceRecord.groupBy({
-      by: ['vegetableId'],
-      where: { date: latestDate.date, ...whereFilter },
-      _avg: { avgPrice: true },
-      _min: { minPrice: true },
-      _max: { maxPrice: true },
+  // Get most recent price per vegetable individually (handles different scrape dates per market)
+  const [latestPerVeg, prevPerVeg] = await Promise.all([
+    prisma.priceRecord.findMany({
+      distinct: ['vegetableId'],
+      orderBy: [{ vegetableId: 'asc' }, { date: 'desc' }],
+      where: whereFilter,
+      select: { vegetableId: true, date: true, avgPrice: true, minPrice: true, maxPrice: true },
     }),
-    prevDate
-      ? prisma.priceRecord.groupBy({
-          by: ['vegetableId'],
-          where: { date: prevDate.date, ...whereFilter },
-          _avg: { avgPrice: true },
-        })
-      : Promise.resolve([]),
+    prisma.priceRecord.findMany({
+      distinct: ['vegetableId'],
+      orderBy: [{ vegetableId: 'asc' }, { date: 'desc' }],
+      where: { ...whereFilter, date: { lte: sevenDaysAgo } },
+      select: { vegetableId: true, avgPrice: true },
+    }),
   ])
 
-  const prevMap = new Map(prevRecords.map((r) => [r.vegetableId, r._avg.avgPrice]))
-  const latestMap = new Map(
-    latestRecords.map((r) => [
-      r.vegetableId,
-      { avg: r._avg.avgPrice, min: r._min.minPrice, max: r._max.maxPrice },
-    ])
-  )
+  const latestMap = new Map(latestPerVeg.map((r) => [r.vegetableId, r]))
+  const prevMap = new Map(prevPerVeg.map((r) => [r.vegetableId, r.avgPrice]))
 
   return vegetables.map((v) => {
     const latest = latestMap.get(v.id)
     const prevAvg = prevMap.get(v.id) ?? null
     const changePct =
-      latest?.avg && prevAvg && prevAvg > 0
-        ? ((latest.avg - prevAvg) / prevAvg) * 100
+      latest?.avgPrice && prevAvg && prevAvg > 0
+        ? ((latest.avgPrice - prevAvg) / prevAvg) * 100
         : null
-
     return {
       ...v,
-      avgPrice: latest?.avg ?? null,
-      minPrice: latest?.min ?? null,
-      maxPrice: latest?.max ?? null,
+      avgPrice: latest?.avgPrice ?? null,
+      minPrice: latest?.minPrice ?? null,
+      maxPrice: latest?.maxPrice ?? null,
       changePct,
-      date: latestDate.date.toISOString().split('T')[0],
+      date: latest?.date.toISOString().split('T')[0] ?? null,
     }
   })
 }
