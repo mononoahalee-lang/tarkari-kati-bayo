@@ -10,7 +10,6 @@ export async function GET(
 ) {
   const { id } = await params
 
-  // Find the latest date that has data for this market
   const latestDates = await prisma.priceRecord.findMany({
     where: { marketId: id },
     distinct: ['date'],
@@ -27,17 +26,9 @@ export async function GET(
   const sevenDaysAgo = new Date(latestDate)
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
   const prevDate = latestDates.find((d) => d.date <= sevenDaysAgo) ?? latestDates[1]
+  const since365 = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000)
 
-  // All vegetable IDs in this market
-  const allVegRecords = await prisma.priceRecord.findMany({
-    where: { marketId: id },
-    distinct: ['vegetableId'],
-    select: { vegetableId: true },
-  })
-  const vegetableIds = allVegRecords.map((r) => r.vegetableId)
-
-  // Latest prices for each vegetable in this market
-  const [latestRecords, prevRecords] = await Promise.all([
+  const [latestRecords, prevRecords, rangeRecords] = await Promise.all([
     prisma.priceRecord.groupBy({
       by: ['vegetableId'],
       where: { marketId: id, date: latestDate },
@@ -50,16 +41,37 @@ export async function GET(
           _avg: { avgPrice: true },
         })
       : Promise.resolve([]),
+    // 52-week high/low for this market
+    prisma.priceRecord.groupBy({
+      by: ['vegetableId'],
+      where: { marketId: id, date: { gte: since365 } },
+      _min: { avgPrice: true },
+      _max: { avgPrice: true },
+    }),
   ])
 
   const prevMap = new Map(prevRecords.map((r) => [r.vegetableId, r._avg.avgPrice]))
-  const prices: Record<string, { avgPrice: number; changePct: number | null }> = {}
+  const rangeMap = new Map(rangeRecords.map((r) => [r.vegetableId, r]))
+
+  const prices: Record<string, {
+    avgPrice: number
+    changePct: number | null
+    min52w: number | null
+    max52w: number | null
+  }> = {}
+
   for (const r of latestRecords) {
     const avg = r._avg.avgPrice ?? 0
     const prev = prevMap.get(r.vegetableId) ?? null
+    const range = rangeMap.get(r.vegetableId)
     const changePct = avg && prev && prev > 0 ? ((avg - prev) / prev) * 100 : null
-    prices[r.vegetableId] = { avgPrice: avg, changePct }
+    prices[r.vegetableId] = {
+      avgPrice: avg,
+      changePct,
+      min52w: range?._min?.avgPrice ?? null,
+      max52w: range?._max?.avgPrice ?? null,
+    }
   }
 
-  return NextResponse.json({ vegetableIds, prices })
+  return NextResponse.json({ prices })
 }

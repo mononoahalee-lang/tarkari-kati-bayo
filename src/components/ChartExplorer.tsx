@@ -14,6 +14,41 @@ type VegItem = {
   unit: string
   avgPrice: number | null
   changePct: number | null
+  min52w: number | null
+  max52w: number | null
+}
+
+function PriceGauge({
+  current, min, max, size = 'sm',
+}: {
+  current: number; min: number | null; max: number | null; size?: 'sm' | 'lg'
+}) {
+  if (min === null || max === null || min >= max) return null
+  const pct = Math.max(2, Math.min(98, ((current - min) / (max - min)) * 100))
+  const color = pct < 30 ? 'bg-green-500' : pct > 70 ? 'bg-red-400' : 'bg-yellow-500'
+  if (size === 'lg') {
+    return (
+      <div className="w-full">
+        <div className="flex justify-between text-[10px] text-zinc-500 mb-1">
+          <span>{min.toFixed(0)}</span>
+          <span className="text-zinc-400">52W Range</span>
+          <span>{max.toFixed(0)}</span>
+        </div>
+        <div className="relative h-1.5 rounded-full bg-zinc-700">
+          <div className={`h-full rounded-full ${color} opacity-80`} style={{ width: `${pct}%` }} />
+          <div
+            className="absolute top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-white border border-zinc-900 shadow"
+            style={{ left: `${pct}%`, transform: 'translateX(-50%) translateY(-50%)' }}
+          />
+        </div>
+      </div>
+    )
+  }
+  return (
+    <div className="w-full h-0.5 rounded-full bg-zinc-700 mt-1">
+      <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
+    </div>
+  )
 }
 
 type MarketItem = {
@@ -85,7 +120,7 @@ export default function ChartExplorer({ vegetables, markets, locale }: Props) {
   const [loadingMarkets, setLoadingMarkets] = useState(false)
   const [mobileListOpen, setMobileListOpen] = useState(false)
   const [marketVegIds, setMarketVegIds] = useState<Set<string> | null>(null)
-  const [marketPriceMap, setMarketPriceMap] = useState<Record<string, { avgPrice: number; changePct: number | null }> | null>(null)
+  const [marketPriceMap, setMarketPriceMap] = useState<Record<string, { avgPrice: number; changePct: number | null; min52w: number | null; max52w: number | null }> | null>(null)
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase()
@@ -129,7 +164,7 @@ export default function ChartExplorer({ vegetables, markets, locale }: Props) {
     fetch(`/api/markets/${selectedMarketId}/vegetables`)
       .then((r) => r.json())
       .then((data) => {
-        const priceMap: Record<string, { avgPrice: number; changePct: number | null }> = data.prices ?? {}
+        const priceMap: Record<string, { avgPrice: number; changePct: number | null; min52w: number | null; max52w: number | null }> = data.prices ?? {}
         // Only show vegetables that have data on the latest date for this market
         const idsWithData = new Set<string>(Object.keys(priceMap))
         setMarketVegIds(idsWithData)
@@ -208,29 +243,36 @@ export default function ChartExplorer({ vegetables, markets, locale }: Props) {
           const mktData = marketPriceMap?.[v.id]
           const displayAvg = mktData?.avgPrice ?? v.avgPrice
           const pct = mktData?.changePct ?? v.changePct
+          const min52w = mktData?.min52w ?? v.min52w
+          const max52w = mktData?.max52w ?? v.max52w
           return (
             <button
               key={v.id}
               onClick={() => { setSelectedId(v.id); setMobileListOpen(false) }}
-              className={`w-full flex items-center justify-between px-3 py-2.5 text-left text-sm transition-colors border-b border-zinc-800 ${
+              className={`w-full px-3 py-2.5 text-left text-sm transition-colors border-b border-zinc-800 ${
                 isSelected
                   ? 'bg-green-900/40 border-l-2 border-l-green-400'
                   : 'hover:bg-zinc-800'
               }`}
             >
-              <span className={`truncate font-medium ${isSelected ? 'text-white' : 'text-zinc-100'}`}>
-                {getName(v, locale)}
-              </span>
-              <div className="flex flex-col items-end ml-2 shrink-0">
-                {displayAvg !== null && displayAvg !== undefined && (
-                  <span className="font-mono text-sm font-semibold text-white">{displayAvg.toFixed(0)}</span>
-                )}
-                {pct !== null && pct !== undefined && (
-                  <span className={`font-mono text-xs font-medium ${pct >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {pct >= 0 ? '+' : ''}{pct.toFixed(1)}%
-                  </span>
-                )}
+              <div className="flex items-center justify-between">
+                <span className={`truncate font-medium ${isSelected ? 'text-white' : 'text-zinc-100'}`}>
+                  {getName(v, locale)}
+                </span>
+                <div className="flex flex-col items-end ml-2 shrink-0">
+                  {displayAvg !== null && displayAvg !== undefined && (
+                    <span className="font-mono text-sm font-semibold text-white">{displayAvg.toFixed(0)}</span>
+                  )}
+                  {pct !== null && pct !== undefined && (
+                    <span className={`font-mono text-xs font-medium ${pct >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {pct >= 0 ? '+' : ''}{pct.toFixed(1)}%
+                    </span>
+                  )}
+                </div>
               </div>
+              {displayAvg !== null && displayAvg !== undefined && (
+                <PriceGauge current={displayAvg} min={min52w} max={max52w} size="sm" />
+              )}
             </button>
           )
         })}
@@ -303,6 +345,16 @@ export default function ChartExplorer({ vegetables, markets, locale }: Props) {
                 )}
               </div>
             </div>
+            {/* 52-week price range gauge */}
+            {(() => {
+              const min52w = marketPriceMap?.[selected.id]?.min52w ?? selected.min52w
+              const max52w = marketPriceMap?.[selected.id]?.max52w ?? selected.max52w
+              return displayPrice !== null && min52w !== null && max52w !== null ? (
+                <div className="shrink-0 rounded-lg border border-zinc-700 bg-zinc-800/50 px-4 py-3">
+                  <PriceGauge current={displayPrice} min={min52w} max={max52w} size="lg" />
+                </div>
+              ) : null
+            })()}
 
             {/* Controls: period + market */}
             <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
