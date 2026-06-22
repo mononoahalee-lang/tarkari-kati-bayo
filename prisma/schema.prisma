@@ -43,6 +43,10 @@ model PriceRecord {
   @@index([date])
   @@index([vegetableId])
   @@index([marketId])
+  // Composite indexes for DISTINCT ON (vegetableId) ORDER BY vegetableId, date DESC
+  @@index([vegetableId, date(sort: Desc)])
+  // Composite index for market-filtered queries: WHERE marketId = ? ORDER BY vegetableId, date DESC
+  @@index([marketId, vegetableId, date(sort: Desc)])
 }
 
 model NewsItem {
