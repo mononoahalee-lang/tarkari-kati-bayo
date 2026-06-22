@@ -61,11 +61,12 @@ export default function PriceChart({ data, visibleDays, height = 320, className 
         borderColor: '#3f3f46',
         timeVisible: true,
         tickMarkFormatter: (time: UTCTimestamp, tickMarkType: TickMarkType) => {
-          const d = new Date((time as number) * 1000)
-          const y = d.getUTCFullYear()
-          const m = String(d.getUTCMonth() + 1).padStart(2, '0')
-          const day = String(d.getUTCDate()).padStart(2, '0')
-          if (tickMarkType === TickMarkType.Year) return `${y}`
+          // time is a "YYYY-MM-DD" string when chart uses string-based time
+          const dateStr = typeof time === 'string'
+            ? time
+            : new Date((time as number) * 1000).toISOString().split('T')[0]
+          const [y, m, day] = dateStr.split('-')
+          if (tickMarkType === TickMarkType.Year) return y
           if (tickMarkType === TickMarkType.Month) return `${y}/${m}`
           return `${m}/${day}`
         },
