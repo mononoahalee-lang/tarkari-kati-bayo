@@ -51,27 +51,39 @@ async function getPriceRows(marketId?: string): Promise<VegRow[]> {
 
   if (vegetables.length === 0) return []
 
-  const whereFilter = marketId ? { marketId } : {}
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
 
-  // Get most recent price per vegetable individually (handles different scrape dates per market)
+  // Raw SQL ensures correct DISTINCT ON semantics (most recent row per vegetable)
   const [latestPerVeg, prevPerVeg] = await Promise.all([
-    prisma.priceRecord.findMany({
-      distinct: ['vegetableId'],
-      orderBy: [{ vegetableId: 'asc' }, { date: 'desc' }],
-      where: whereFilter,
-      select: { vegetableId: true, date: true, avgPrice: true, minPrice: true, maxPrice: true },
-    }),
-    prisma.priceRecord.findMany({
-      distinct: ['vegetableId'],
-      orderBy: [{ vegetableId: 'asc' }, { date: 'desc' }],
-      where: { ...whereFilter, date: { lte: sevenDaysAgo } },
-      select: { vegetableId: true, avgPrice: true },
-    }),
+    marketId
+      ? prisma.$queryRaw<Array<{ vegetableId: string; avgPrice: number; minPrice: number; maxPrice: number; date: Date }>>`
+          SELECT DISTINCT ON ("vegetableId") "vegetableId", "avgPrice", "minPrice", "maxPrice", "date"
+          FROM "PriceRecord"
+          WHERE "marketId" = ${marketId}
+          ORDER BY "vegetableId", "date" DESC
+        `
+      : prisma.$queryRaw<Array<{ vegetableId: string; avgPrice: number; minPrice: number; maxPrice: number; date: Date }>>`
+          SELECT DISTINCT ON ("vegetableId") "vegetableId", "avgPrice", "minPrice", "maxPrice", "date"
+          FROM "PriceRecord"
+          ORDER BY "vegetableId", "date" DESC
+        `,
+    marketId
+      ? prisma.$queryRaw<Array<{ vegetableId: string; avgPrice: number }>>`
+          SELECT DISTINCT ON ("vegetableId") "vegetableId", "avgPrice"
+          FROM "PriceRecord"
+          WHERE "marketId" = ${marketId} AND "date" <= ${sevenDaysAgo}
+          ORDER BY "vegetableId", "date" DESC
+        `
+      : prisma.$queryRaw<Array<{ vegetableId: string; avgPrice: number }>>`
+          SELECT DISTINCT ON ("vegetableId") "vegetableId", "avgPrice"
+          FROM "PriceRecord"
+          WHERE "date" <= ${sevenDaysAgo}
+          ORDER BY "vegetableId", "date" DESC
+        `,
   ])
 
-  const latestMap = new Map(latestPerVeg.map((r) => [r.vegetableId, r]))
-  const prevMap = new Map(prevPerVeg.map((r) => [r.vegetableId, r.avgPrice]))
+  const latestMap = new Map(latestPerVeg.map((r) => [r.vegetableId, { ...r, avgPrice: Number(r.avgPrice), minPrice: Number(r.minPrice), maxPrice: Number(r.maxPrice) }]))
+  const prevMap = new Map(prevPerVeg.map((r) => [r.vegetableId, Number(r.avgPrice)]))
 
   return vegetables.map((v) => {
     const latest = latestMap.get(v.id)
@@ -86,7 +98,7 @@ async function getPriceRows(marketId?: string): Promise<VegRow[]> {
       minPrice: latest?.minPrice ?? null,
       maxPrice: latest?.maxPrice ?? null,
       changePct,
-      date: latest?.date.toISOString().split('T')[0] ?? null,
+      date: latest?.date ? String(latest.date).split('T')[0] : null,
     }
   })
 }
@@ -180,6 +192,36 @@ export default async function HomePage({
             <p className="text-xs text-zinc-400">{chartDesc}</p>
           </div>
         </Link>
+      </div>
+
+      {/* Mobile market selector — shown at top on mobile so users don't need to scroll */}
+      <div className="sm:hidden rounded-lg border border-zinc-800 bg-zinc-900 p-3">
+        <p className="text-xs text-zinc-500 mb-2">
+          {locale === 'ne' ? 'बजार' : locale === 'ja' ? '市場選択' : 'Select Market'}
+        </p>
+        <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+          <Link
+            href={`/${locale}`}
+            className={`shrink-0 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+              !selectedMarketId ? 'bg-zinc-600 text-white' : 'bg-zinc-800 text-zinc-400'
+            }`}
+          >
+            {locale === 'ne' ? 'सबै' : locale === 'ja' ? '全市場' : 'All'}
+          </Link>
+          {markets.map((m) => (
+            <Link
+              key={m.id}
+              href={`/${locale}?marketId=${m.id}`}
+              className={`shrink-0 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                selectedMarketId === m.id
+                  ? m.source === 'kalimati' ? 'bg-green-600 text-white' : 'bg-blue-600 text-white'
+                  : 'bg-zinc-800 text-zinc-400'
+              }`}
+            >
+              {locale === 'ne' ? m.nameNe : m.nameEn}
+            </Link>
+          ))}
+        </div>
       </div>
 
       {withData.length === 0 ? (

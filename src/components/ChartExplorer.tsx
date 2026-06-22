@@ -239,7 +239,7 @@ export default function ChartExplorer({ vegetables, markets, locale }: Props) {
   )
 
   return (
-    <div className="flex flex-col lg:flex-row gap-0 h-[calc(100vh-8rem)]">
+    <div className="flex flex-col lg:flex-row gap-0 lg:h-[calc(100vh-8rem)]">
       {/* Mobile: drawer overlay */}
       {mobileListOpen && (
         <div className="lg:hidden fixed inset-0 z-50 flex">
@@ -259,8 +259,8 @@ export default function ChartExplorer({ vegetables, markets, locale }: Props) {
         {vegListContent}
       </div>
 
-      {/* Right: chart panel */}
-      <div className="flex-1 flex flex-col overflow-hidden p-3 sm:p-4 gap-3 min-h-0">
+      {/* Right: chart panel — mobile scrolls freely; desktop is fixed-height flex */}
+      <div className="flex-1 flex flex-col overflow-y-auto lg:overflow-hidden p-3 sm:p-4 gap-3 lg:min-h-0">
         {/* Mobile: select vegetable button */}
         <div className="lg:hidden shrink-0">
           <button
@@ -338,7 +338,7 @@ export default function ChartExplorer({ vegetables, markets, locale }: Props) {
             </div>
 
             {/* Chart */}
-            <div className="flex-1 min-h-0 rounded-lg border border-zinc-700 bg-zinc-900 p-3">
+            <div className="h-[280px] lg:flex-1 lg:h-auto lg:min-h-0 rounded-lg border border-zinc-700 bg-zinc-900 p-3">
               {loading ? (
                 <div className="flex h-full items-center justify-center text-zinc-400 text-sm">{ui.loading}</div>
               ) : candlesticks.length > 0 ? (
@@ -379,7 +379,7 @@ export default function ChartExplorer({ vegetables, markets, locale }: Props) {
             )}
 
             {/* Market comparison table */}
-            <div className="shrink-0 rounded-lg border border-zinc-700 bg-zinc-900 overflow-hidden">
+            <div className="hidden lg:block shrink-0 rounded-lg border border-zinc-700 bg-zinc-900 overflow-hidden">
               <div className="px-3 py-2 border-b border-zinc-700 flex items-center justify-between">
                 <h3 className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">{ui.marketCompare}</h3>
                 {marketPrices.length > 0 && (

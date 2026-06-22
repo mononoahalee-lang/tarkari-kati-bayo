@@ -7,29 +7,30 @@ import ChartExplorer from '@/components/ChartExplorer'
 export const dynamic = 'force-dynamic'
 
 async function getVegetablesWithPrice() {
-  const vegetables = await prisma.vegetable.findMany({
-    select: { id: true, nameNe: true, nameEn: true, nameJa: true, unit: true },
-    orderBy: { nameEn: 'asc' },
-  })
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
 
-  // Get the most recent price per vegetable individually (handles different scrape dates per market)
-  const [latestPerVeg, prevPerVeg] = await Promise.all([
-    prisma.priceRecord.findMany({
-      distinct: ['vegetableId'],
-      orderBy: [{ vegetableId: 'asc' }, { date: 'desc' }],
-      select: { vegetableId: true, avgPrice: true },
+  const [vegetables, latestPerVeg, prevPerVeg] = await Promise.all([
+    prisma.vegetable.findMany({
+      select: { id: true, nameNe: true, nameEn: true, nameJa: true, unit: true },
+      orderBy: { nameEn: 'asc' },
     }),
-    // Most recent price that is at least 7 days before today for comparison
-    prisma.priceRecord.findMany({
-      distinct: ['vegetableId'],
-      orderBy: [{ vegetableId: 'asc' }, { date: 'desc' }],
-      where: { date: { lte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
-      select: { vegetableId: true, avgPrice: true },
-    }),
+    // Most recent price per vegetable (raw SQL for guaranteed DISTINCT ON semantics)
+    prisma.$queryRaw<Array<{ vegetableId: string; avgPrice: number }>>`
+      SELECT DISTINCT ON ("vegetableId") "vegetableId", "avgPrice"
+      FROM "PriceRecord"
+      ORDER BY "vegetableId", "date" DESC
+    `,
+    // Most recent price per vegetable that is at least 7 days old (for weekly change)
+    prisma.$queryRaw<Array<{ vegetableId: string; avgPrice: number }>>`
+      SELECT DISTINCT ON ("vegetableId") "vegetableId", "avgPrice"
+      FROM "PriceRecord"
+      WHERE "date" <= ${sevenDaysAgo}
+      ORDER BY "vegetableId", "date" DESC
+    `,
   ])
 
-  const latestMap = new Map(latestPerVeg.map((r) => [r.vegetableId, r.avgPrice]))
-  const prevMap = new Map(prevPerVeg.map((r) => [r.vegetableId, r.avgPrice]))
+  const latestMap = new Map(latestPerVeg.map((r) => [r.vegetableId, Number(r.avgPrice)]))
+  const prevMap = new Map(prevPerVeg.map((r) => [r.vegetableId, Number(r.avgPrice)]))
 
   return vegetables.map((v) => {
     const avg = latestMap.get(v.id) ?? null
