@@ -12,8 +12,23 @@ export async function PUT(
   const { date, storeName, location, marketId, vegetableId, observedPrice, note } = await req.json()
 
   const dateObj = new Date(date + 'T00:00:00Z')
-  let marketPrice: number | null = null
-  if (marketId) {
+
+  // Fetch existing record to compare key fields
+  const existing = await prisma.fieldObservation.findUnique({
+    where: { id },
+    select: { date: true, marketId: true, vegetableId: true, marketPrice: true },
+  })
+
+  const existingDateStr = existing?.date?.toISOString().split('T')[0] ?? ''
+  const keyFieldsChanged =
+    !existing ||
+    existingDateStr !== date ||
+    existing.marketId !== (marketId || null) ||
+    existing.vegetableId !== vegetableId
+
+  // Re-fetch market price only when date/market/vegetable changed
+  let marketPrice: number | null = existing?.marketPrice ?? null
+  if (keyFieldsChanged && marketId) {
     const record = await prisma.priceRecord.findFirst({
       where: {
         vegetableId,
@@ -23,7 +38,10 @@ export async function PUT(
       orderBy: { date: 'desc' },
       select: { avgPrice: true },
     })
-    marketPrice = record?.avgPrice ?? null
+    // Only overwrite if we actually found a price; otherwise keep existing
+    if (record?.avgPrice != null) marketPrice = record.avgPrice
+  } else if (!marketId) {
+    marketPrice = null
   }
 
   const updated = await prisma.fieldObservation.update({
