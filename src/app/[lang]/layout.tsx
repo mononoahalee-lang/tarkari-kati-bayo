@@ -56,6 +56,9 @@ export default async function LangLayout({
               <Link href={`/${locale}/news`} className="hidden sm:block text-zinc-200 hover:text-white transition-colors px-1">
                 {dict.nav.news}
               </Link>
+              <Link href={`/${locale}/field-work`} className="hidden sm:block text-zinc-200 hover:text-white transition-colors px-1">
+                {dict.nav.fieldWork}
+              </Link>
               <div className="flex gap-1 rounded-md border border-zinc-700 p-0.5">
                 {locales.map((l) => (
                   <Link

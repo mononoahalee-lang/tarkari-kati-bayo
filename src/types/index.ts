@@ -36,6 +36,7 @@ export interface Dictionary {
     markets: string
     news: string
     chart: string
+    fieldWork: string
   }
   home: {
     title: string

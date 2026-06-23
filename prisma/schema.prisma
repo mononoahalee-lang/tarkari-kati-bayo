@@ -8,24 +8,26 @@ datasource db {
 }
 
 model Market {
-  id       String        @id @default(cuid())
-  nameNe   String
-  nameEn   String
-  district String
-  source   String        // "kalimati" | "ampis"
-  prices   PriceRecord[]
+  id                String             @id @default(cuid())
+  nameNe            String
+  nameEn            String
+  district          String
+  source            String             // "kalimati" | "ampis"
+  prices            PriceRecord[]
+  fieldObservations FieldObservation[]
 
   @@unique([nameEn])
 }
 
 model Vegetable {
-  id       String        @id @default(cuid())
-  nameNe   String        @unique
-  nameEn   String
-  nameJa   String
-  category String        @default("vegetable")
-  unit     String        @default("kg")
-  prices   PriceRecord[]
+  id                String             @id @default(cuid())
+  nameNe            String             @unique
+  nameEn            String
+  nameJa            String
+  category          String             @default("vegetable")
+  unit              String             @default("kg")
+  prices            PriceRecord[]
+  fieldObservations FieldObservation[]
 }
 
 model PriceRecord {
@@ -59,4 +61,22 @@ model NewsItem {
   publishedAt DateTime
   summary     String?
   createdAt   DateTime @default(now())
+}
+
+model FieldObservation {
+  id            String    @id @default(cuid())
+  date          DateTime  @db.Date
+  storeName     String
+  location      String
+  marketId      String?
+  vegetableId   String
+  observedPrice Float
+  marketPrice   Float?
+  note          String?
+  createdAt     DateTime  @default(now())
+
+  vegetable     Vegetable @relation(fields: [vegetableId], references: [id])
+  market        Market?   @relation(fields: [marketId], references: [id])
+
+  @@index([date(sort: Desc)])
 }
