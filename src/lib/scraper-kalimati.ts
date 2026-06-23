@@ -49,6 +49,16 @@ export async function scrapeKalimati(targetDate?: Date): Promise<number> {
     return parseFloat(cleaned)
   }
 
+  const totalRows = $('table tbody tr').length
+  console.log(`[Kalimati] HTML length: ${html.length}, table tbody rows: ${totalRows}`)
+
+  if (totalRows === 0) {
+    // Try alternative selectors — website may have changed structure
+    const anyRows = $('tr').length
+    const tables = $('table').length
+    console.error(`[Kalimati] No tbody rows found. tables: ${tables}, total tr: ${anyRows}. HTML snippet: ${html.slice(0, 500)}`)
+  }
+
   $('table tbody tr').each((_, tr) => {
     const tds = $(tr).find('td')
     if (tds.length < 5) return
@@ -60,6 +70,7 @@ export async function scrapeKalimati(targetDate?: Date): Promise<number> {
     if (!nameNe || isNaN(min) || isNaN(max) || isNaN(avg)) return
     rows.push({ nameNe, unit, min, max, avg })
   })
+  console.log(`[Kalimati] Parsed ${rows.length} rows`)
 
   for (const row of rows) {
     const vegetable = await prisma.vegetable.upsert({
