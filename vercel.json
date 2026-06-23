@@ -1,8 +1,12 @@
 {
   "crons": [
     {
-      "path": "/api/cron/scrape",
+      "path": "/api/cron/scrape-kalimati",
       "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/scrape-ampis",
+      "schedule": "30 3 * * *"
     },
     {
       "path": "/api/cron/news",
