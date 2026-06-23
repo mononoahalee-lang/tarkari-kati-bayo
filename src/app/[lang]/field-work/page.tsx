@@ -12,8 +12,11 @@ export default async function FieldWorkPage({ params }: { params: Promise<{ lang
 
   const locale = lang as Locale
 
+  const since365 = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000)
+
   const [vegetables, markets] = await Promise.all([
     prisma.vegetable.findMany({
+      where: { prices: { some: { date: { gte: since365 } } } },
       select: { id: true, nameEn: true, nameNe: true, nameJa: true, unit: true },
       orderBy: { nameEn: 'asc' },
     }),

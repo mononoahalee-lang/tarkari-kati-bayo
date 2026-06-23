@@ -39,19 +39,21 @@ async function getVegetablesWithPrice() {
   const prevMap = new Map(prevPerVeg.map((r) => [r.vegetableId, Number(r.avgPrice)]))
   const rangeMap = new Map(rangePerVeg.map((r) => [r.vegetableId, r]))
 
-  return vegetables.map((v) => {
-    const avg = latestMap.get(v.id) ?? null
-    const prev = prevMap.get(v.id) ?? null
-    const range = rangeMap.get(v.id)
-    const changePct = avg !== null && prev !== null && prev > 0 ? ((avg - prev) / prev) * 100 : null
-    return {
-      ...v,
-      avgPrice: avg,
-      changePct,
-      min52w: range?._min?.avgPrice ?? null,
-      max52w: range?._max?.avgPrice ?? null,
-    }
-  })
+  return vegetables
+    .filter((v) => rangeMap.has(v.id)) // exclude vegetables with no data in the last 365 days
+    .map((v) => {
+      const avg = latestMap.get(v.id) ?? null
+      const prev = prevMap.get(v.id) ?? null
+      const range = rangeMap.get(v.id)
+      const changePct = avg !== null && prev !== null && prev > 0 ? ((avg - prev) / prev) * 100 : null
+      return {
+        ...v,
+        avgPrice: avg,
+        changePct,
+        min52w: range?._min?.avgPrice ?? null,
+        max52w: range?._max?.avgPrice ?? null,
+      }
+    })
 }
 
 async function getMarkets() {
