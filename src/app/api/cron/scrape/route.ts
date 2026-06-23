@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { scrapeKalimati } from '@/lib/scraper-kalimati'
 import { scrapeAmpis } from '@/lib/scraper-ampis'
+import { prisma } from '@/lib/prisma'
 
 export const runtime = 'nodejs'
-export const maxDuration = 300
+export const maxDuration = 60
 
 async function runScrape(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
@@ -11,27 +12,38 @@ async function runScrape(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  try {
-    const [kalimatiCount, ampisCount] = await Promise.allSettled([
-      scrapeKalimati(),
-      scrapeAmpis(),
-    ]).then((results) =>
-      results.map((r) => (r.status === 'fulfilled' ? r.value : 0))
-    )
+  const { searchParams } = new URL(request.url)
+  const dateParam = searchParams.get('date') ?? (await request.json().catch(() => ({}))).date as string | undefined
 
-    return NextResponse.json({
-      success: true,
-      kalimati: kalimatiCount,
-      ampis: ampisCount,
-      total: (kalimatiCount as number) + (ampisCount as number),
+  const targetDate = dateParam ? new Date(dateParam + 'T00:00:00Z') : undefined
+
+  const startAt = Date.now()
+
+  const [kalimatiResult, ampisResult] = await Promise.allSettled([
+    scrapeKalimati(targetDate),
+    scrapeAmpis(),
+  ])
+
+  const kalimatiCount = kalimatiResult.status === 'fulfilled' ? kalimatiResult.value : 0
+  const ampisCount = ampisResult.status === 'fulfilled' ? ampisResult.value : 0
+
+  if (ampisResult.status === 'rejected') {
+    const today = targetDate ?? new Date()
+    today.setHours(0, 0, 0, 0)
+    await prisma.scrapeLog.create({
+      data: { source: 'ampis', targetDate: today, itemsCount: 0, success: false, message: String(ampisResult.reason).slice(0, 200) },
     })
-  } catch (err) {
-    console.error('Scrape error:', err)
-    return NextResponse.json({ error: String(err) }, { status: 500 })
   }
+
+  return NextResponse.json({
+    success: true,
+    kalimati: kalimatiCount,
+    ampis: ampisCount,
+    total: kalimatiCount + ampisCount,
+    durationMs: Date.now() - startAt,
+  })
 }
 
-// Vercel Cron sends GET — must handle GET in production
 export async function GET(request: NextRequest) {
   return runScrape(request)
 }

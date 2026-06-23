@@ -63,6 +63,18 @@ model NewsItem {
   createdAt   DateTime @default(now())
 }
 
+model ScrapeLog {
+  id        String   @id @default(cuid())
+  source    String   // "kalimati" | "ampis"
+  runAt     DateTime @default(now())
+  targetDate DateTime @db.Date
+  itemsCount Int
+  success   Boolean
+  message   String?
+
+  @@index([source, runAt(sort: Desc)])
+}
+
 model FieldObservation {
   id            String    @id @default(cuid())
   date          DateTime  @db.Date
