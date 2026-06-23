@@ -70,27 +70,28 @@ const UI: Record<Locale, {
   search: string; select: string; noData: string; high: string; low: string; avg: string
   loading: string; noPriceHistory: string; allMarkets: string; market: string
   avgPrice: string; allMarketsAvg: string; marketCompare: string; min: string; max: string
+  recentPrices: string; date: string
 }> = {
   ne: {
     search: 'तरकारी खोज्नुहोस्...', select: 'तरकारी चुन्नुहोस्', noData: 'डेटा उपलब्ध छैन',
     high: 'उच्च', low: 'न्यून', avg: 'औसत', loading: 'लोड हुँदैछ...', noPriceHistory: 'मूल्य इतिहास उपलब्ध छैन',
     allMarkets: 'सबै बजार', market: 'बजार',
     avgPrice: 'औसत थोक मूल्य', allMarketsAvg: 'सबै बजारको औसत', marketCompare: 'बजारअनुसार मूल्य',
-    min: 'न्यून', max: 'उच्च',
+    min: 'न्यून', max: 'उच्च', recentPrices: 'पछिल्लो ३ दिनको मूल्य', date: 'मिति',
   },
   en: {
     search: 'Search vegetables...', select: 'Select a vegetable', noData: 'No data',
     high: 'High', low: 'Low', avg: 'Avg', loading: 'Loading...', noPriceHistory: 'No price history yet. Data is collected daily.',
     allMarkets: 'All Markets', market: 'Market',
     avgPrice: 'Avg. Wholesale Price', allMarketsAvg: 'All markets average', marketCompare: 'Price by Market',
-    min: 'Min', max: 'Max',
+    min: 'Min', max: 'Max', recentPrices: 'Recent 3 Days', date: 'Date',
   },
   ja: {
     search: '野菜を検索...', select: '野菜を選択', noData: 'データなし',
     high: '最高値', low: '最安値', avg: '平均', loading: '読み込み中...', noPriceHistory: '価格履歴がありません（毎日更新）',
     allMarkets: '全市場', market: '市場',
     avgPrice: '平均卸売価格', allMarketsAvg: '全市場の平均', marketCompare: '市場別価格',
-    min: '最低値', max: '最高値',
+    min: '最低値', max: '最高値', recentPrices: '直近3日間の価格', date: '日付',
   },
 }
 
@@ -427,6 +428,35 @@ export default function ChartExplorer({ vegetables, markets, locale }: Props) {
                     )}
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* Recent 3 days price table */}
+            {candlesticks.length > 0 && (
+              <div className="shrink-0 rounded-lg border border-zinc-700 bg-zinc-900 overflow-hidden">
+                <div className="px-3 py-2 border-b border-zinc-700">
+                  <h3 className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">{ui.recentPrices}</h3>
+                </div>
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-zinc-800 text-zinc-500 uppercase tracking-wider">
+                      <th className="px-3 py-1.5 text-left">{ui.date}</th>
+                      <th className="px-3 py-1.5 text-right">{ui.min}</th>
+                      <th className="px-3 py-1.5 text-right font-bold text-zinc-300">{ui.avg}</th>
+                      <th className="px-3 py-1.5 text-right">{ui.max}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {candlesticks.slice(-3).reverse().map((c) => (
+                      <tr key={c.time as string} className="border-b border-zinc-800/50">
+                        <td className="px-3 py-2 text-zinc-400 font-mono">{c.time as string}</td>
+                        <td className="px-3 py-2 text-right font-mono text-red-400">{c.low.toFixed(0)}</td>
+                        <td className="px-3 py-2 text-right font-mono font-bold text-white">{c.close.toFixed(0)}</td>
+                        <td className="px-3 py-2 text-right font-mono text-green-400">{c.high.toFixed(0)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
 
