@@ -47,6 +47,7 @@ export interface Dictionary {
     searchPlaceholder: string
     updated: string
     noData: string
+    vsWeekAgo: string
   }
   detail: {
     priceHistory: string

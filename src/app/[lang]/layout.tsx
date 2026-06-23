@@ -78,10 +78,29 @@ export default async function LangLayout({
           </div>
         </header>
         <ServiceWorkerRegister />
-        <main className="flex-1">{children}</main>
-        <footer className="border-t border-zinc-800 py-4 text-center text-xs text-zinc-600">
+        <main className="flex-1 pb-16 sm:pb-0">{children}</main>
+        <footer className="hidden sm:block border-t border-zinc-800 py-4 text-center text-xs text-zinc-600">
           Data: Kalimati Market &amp; AMPIS — Nepal Agriculture
         </footer>
+        {/* Mobile bottom nav */}
+        <nav className="sm:hidden fixed bottom-0 inset-x-0 z-50 bg-zinc-950 border-t border-zinc-800 flex items-center justify-around px-2 py-2">
+          <Link href={`/${locale}`} className="flex flex-col items-center gap-0.5 text-zinc-400 hover:text-white transition-colors px-2 py-1">
+            <span className="text-lg leading-none">🏠</span>
+            <span className="text-[10px]">{dict.nav.home}</span>
+          </Link>
+          <Link href={`/${locale}/chart`} className="flex flex-col items-center gap-0.5 text-zinc-400 hover:text-white transition-colors px-2 py-1">
+            <span className="text-lg leading-none">📈</span>
+            <span className="text-[10px]">{dict.nav.chart}</span>
+          </Link>
+          <Link href={`/${locale}/field-work`} className="flex flex-col items-center gap-0.5 text-zinc-400 hover:text-white transition-colors px-2 py-1">
+            <span className="text-lg leading-none">📋</span>
+            <span className="text-[10px]">{dict.nav.fieldWork}</span>
+          </Link>
+          <Link href={`/${locale}/news`} className="flex flex-col items-center gap-0.5 text-zinc-400 hover:text-white transition-colors px-2 py-1">
+            <span className="text-lg leading-none">📰</span>
+            <span className="text-[10px]">{dict.nav.news}</span>
+          </Link>
+        </nav>
       </body>
     </html>
   )

@@ -14,7 +14,8 @@
     "allVegetables": "All Vegetables",
     "searchPlaceholder": "Search vegetables...",
     "updated": "Updated",
-    "noData": "No data available"
+    "noData": "No data available",
+    "vsWeekAgo": "vs 7 days ago"
   },
   "detail": {
     "priceHistory": "Price History",

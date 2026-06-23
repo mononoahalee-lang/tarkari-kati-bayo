@@ -14,7 +14,8 @@
     "allVegetables": "全品目",
     "searchPlaceholder": "野菜を検索...",
     "updated": "更新",
-    "noData": "データがありません"
+    "noData": "データがありません",
+    "vsWeekAgo": "前週比（7日前比較）"
   },
   "detail": {
     "priceHistory": "価格履歴",

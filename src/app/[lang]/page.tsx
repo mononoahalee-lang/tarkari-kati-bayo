@@ -234,9 +234,12 @@ export default async function HomePage({
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {/* Gainers */}
             <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
-              <h2 className="mb-3 text-sm font-semibold text-green-400 uppercase tracking-wider">
-                {dict.home.topGainers}
-              </h2>
+              <div className="flex items-baseline justify-between mb-3">
+                <h2 className="text-sm font-semibold text-green-400 uppercase tracking-wider">
+                  {dict.home.topGainers}
+                </h2>
+                <span className="text-[10px] text-zinc-500">{dict.home.vsWeekAgo}</span>
+              </div>
               <div className="space-y-2">
                 {gainers.length === 0 ? (
                   <p className="text-xs text-zinc-500">{dict.home.noData}</p>
@@ -260,9 +263,12 @@ export default async function HomePage({
 
             {/* Losers */}
             <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
-              <h2 className="mb-3 text-sm font-semibold text-red-400 uppercase tracking-wider">
-                {dict.home.topLosers}
-              </h2>
+              <div className="flex items-baseline justify-between mb-3">
+                <h2 className="text-sm font-semibold text-red-400 uppercase tracking-wider">
+                  {dict.home.topLosers}
+                </h2>
+                <span className="text-[10px] text-zinc-500">{dict.home.vsWeekAgo}</span>
+              </div>
               <div className="space-y-2">
                 {losers.length === 0 ? (
                   <p className="text-xs text-zinc-500">{dict.home.noData}</p>

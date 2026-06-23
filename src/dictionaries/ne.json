@@ -14,7 +14,8 @@
     "allVegetables": "सबै तरकारी",
     "searchPlaceholder": "तरकारी खोज्नुहोस्...",
     "updated": "अद्यावधिक",
-    "noData": "डेटा उपलब्ध छैन"
+    "noData": "डेटा उपलब्ध छैन",
+    "vsWeekAgo": "७ दिन अघिको तुलनामा"
   },
   "detail": {
     "priceHistory": "मूल्य इतिहास",
