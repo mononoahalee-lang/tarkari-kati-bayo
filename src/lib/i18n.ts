@@ -1,7 +1,7 @@
 import type { Locale, Dictionary } from '@/types'
 
 export const locales: Locale[] = ['ne', 'en', 'ja']
-export const defaultLocale: Locale = 'ne'
+export const defaultLocale: Locale = 'en'
 
 export function hasLocale(lang: string): lang is Locale {
   return locales.includes(lang as Locale)
