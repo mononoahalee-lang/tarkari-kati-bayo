@@ -78,13 +78,22 @@ export async function scrapeKalimati(targetDate?: Date): Promise<number> {
     return 0
   }
 
-  // Batch: look up all existing vegetables in one query
+  // Normalize nameNe: remove spaces before parentheses to avoid duplicate records
+  // when Kalimati website toggles between "बन्दा(लोकल)" and "बन्दा (लोकल)"
+  const normalizeNe = (s: string) => s.replace(/\s+\(/g, '(').trim()
+  rows = rows.map((r) => ({ ...r, nameNe: normalizeNe(r.nameNe) }))
+
+  // Batch: look up all existing vegetables in one query (also try with-space variants)
   const nameNeList = rows.map((r) => r.nameNe)
   const existingVegs = await prisma.vegetable.findMany({
-    where: { nameNe: { in: nameNeList } },
+    where: { nameNe: { in: [...nameNeList, ...nameNeList.map((n) => n.replace(/\(/g, ' ('))] } },
     select: { id: true, nameNe: true },
   })
-  const vegMap = new Map(existingVegs.map((v) => [v.nameNe, v.id]))
+  const vegMap = new Map<string, string>()
+  for (const v of existingVegs) {
+    vegMap.set(v.nameNe, v.id)
+    vegMap.set(normalizeNe(v.nameNe), v.id)
+  }
 
   // Create missing vegetables in bulk
   const missing = rows.filter((r) => !vegMap.has(r.nameNe))

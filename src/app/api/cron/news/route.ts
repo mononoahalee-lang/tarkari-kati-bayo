@@ -5,6 +5,17 @@ import { prisma } from '@/lib/prisma'
 export const runtime = 'nodejs'
 export const maxDuration = 60
 
+// Real Nepal market/agriculture reference URLs
+const REFERENCE_SOURCES = [
+  { url: 'https://kalimatimarket.gov.np/price', source: 'Kalimati Market Office' },
+  { url: 'https://ampis.gov.np', source: 'AMPIS Nepal' },
+  { url: 'https://moad.gov.np', source: 'Ministry of Agriculture Nepal' },
+  { url: 'https://ekantipur.com/news/business', source: 'Kantipur Daily' },
+  { url: 'https://thehimalayantimes.com/business', source: 'The Himalayan Times' },
+  { url: 'https://myrepublica.nagariknetwork.com/category/business/', source: 'My Republica' },
+  { url: 'https://www.onlinekhabar.com/content/agriculture', source: 'Online Khabar' },
+]
+
 async function runNews(request: NextRequest): Promise<NextResponse> {
   const authHeader = request.headers.get('authorization')
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -15,17 +26,22 @@ async function runNews(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'GEMINI_API_KEY not configured' }, { status: 503 })
   }
 
-  const today = new Date().toISOString().split('T')[0] // YYYY-MM-DD
+  const today = new Date().toISOString().split('T')[0]
+
+  const sourceList = REFERENCE_SOURCES.map((s, i) => `${i + 1}. ${s.url} (${s.source})`).join('\n')
 
   const prompt = `You are a news curator for Nepal vegetable markets. Today is ${today}.
 
-Generate 5 realistic news items about Nepal vegetable markets published today. Topics: Kalimati prices, seasonal supply changes, weather impact on crops, market trends, export/import updates.
+Generate 5 realistic news items about Nepal vegetable markets published today.
+Topics: Kalimati prices, seasonal supply changes, weather impact on crops, market trends, export/import updates.
 
-Each URL MUST include today's date (${today}) to be unique. Use this format:
-"https://example.com/nepal-market/${today}/item-1"  (change item-1 to item-2, item-3, item-4, item-5)
+For each news item, pick the MOST RELEVANT reference URL from this list:
+${sourceList}
+
+Use the exact URL from the list above (do NOT modify it). Append ?ref=${today}-N (where N is 1-5) to make it unique.
 
 Return ONLY a valid JSON array (no markdown):
-[{"titleEn":"...","titleNe":null,"titleJa":"...","url":"https://example.com/nepal-market/${today}/item-1","source":"Kalimati Market Office","publishedAt":"${today}T06:00:00Z","summary":"2 sentence summary in English."}]`
+[{"titleEn":"...","titleNe":"...","titleJa":"...","url":"<exact url from list above>?ref=${today}-1","source":"<source name from list>","publishedAt":"${today}T06:00:00Z","summary":"2 sentence summary in English."}]`
 
   try {
     const text = await generateText(prompt)
@@ -41,38 +57,51 @@ Return ONLY a valid JSON array (no markdown):
       summary: string | null
     }> = JSON.parse(jsonMatch[0])
 
-    // Delete news older than 30 days to keep feed fresh
     const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
     await prisma.newsItem.deleteMany({ where: { publishedAt: { lt: cutoff } } })
 
+    const validBaseDomains = REFERENCE_SOURCES.map((s) => new URL(s.url).hostname)
+
     let saved = 0
-    for (const item of newsItems) {
-      if (!item.url || !item.titleEn) continue
-      // Ensure URL contains today's date (guard against AI ignoring instructions)
-      const uniqueUrl = item.url.includes(today)
-        ? item.url
-        : `https://example.com/nepal-market/${today}/${saved + 1}`
+    for (let i = 0; i < newsItems.length; i++) {
+      const item = newsItems[i]
+      if (!item.titleEn) continue
+
+      // Validate URL is from our allowed sources; fallback to Kalimati if AI hallucinated a URL
+      let finalUrl = item.url ?? ''
+      try {
+        const hostname = new URL(finalUrl).hostname
+        if (!validBaseDomains.includes(hostname)) {
+          finalUrl = `${REFERENCE_SOURCES[0].url}?ref=${today}-${i + 1}`
+        } else if (!finalUrl.includes('ref=')) {
+          finalUrl = `${finalUrl}${finalUrl.includes('?') ? '&' : '?'}ref=${today}-${i + 1}`
+        }
+      } catch {
+        finalUrl = `${REFERENCE_SOURCES[0].url}?ref=${today}-${i + 1}`
+      }
+
       try {
         await prisma.newsItem.upsert({
-          where: { url: uniqueUrl },
+          where: { url: finalUrl },
           create: {
             titleEn: item.titleEn,
             titleNe: item.titleNe ?? null,
             titleJa: item.titleJa ?? null,
-            url: uniqueUrl,
+            url: finalUrl,
             source: item.source || 'Nepal Market News',
             publishedAt: new Date(today + 'T00:00:00Z'),
             summary: item.summary ?? null,
           },
           update: {
             titleEn: item.titleEn,
+            titleNe: item.titleNe ?? null,
             titleJa: item.titleJa ?? null,
             summary: item.summary ?? null,
             publishedAt: new Date(today + 'T00:00:00Z'),
           },
         })
         saved++
-      } catch { /* skip */ }
+      } catch { /* skip duplicate */ }
     }
 
     return NextResponse.json({ message: 'News updated', date: today, saved })

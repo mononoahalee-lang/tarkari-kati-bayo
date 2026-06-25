@@ -103,6 +103,50 @@ async function getPriceRows(marketId?: string): Promise<VegRow[]> {
   })
 }
 
+type SpreadRow = {
+  vegetableId: string
+  nameEn: string
+  nameNe: string
+  nameJa: string
+  unit: string
+  minPrice: number
+  maxPrice: number
+  minMarket: string
+  maxMarket: string
+  spreadPct: number
+}
+
+async function getMarketSpread(): Promise<SpreadRow[]> {
+  const rows = await prisma.$queryRaw<SpreadRow[]>`
+    WITH recent AS (
+      SELECT p."vegetableId", p."marketId", p."avgPrice", m."nameEn" as market_en
+      FROM "PriceRecord" p
+      JOIN "Market" m ON m.id = p."marketId"
+      WHERE p.date >= NOW() - INTERVAL '3 days'
+    ),
+    agg AS (
+      SELECT r."vegetableId",
+        MIN(r."avgPrice") as min_price, MAX(r."avgPrice") as max_price,
+        MIN(r.market_en) FILTER (WHERE r."avgPrice" = (SELECT MIN(avgPrice) FROM recent r2 WHERE r2."vegetableId" = r."vegetableId")) as min_market,
+        MIN(r.market_en) FILTER (WHERE r."avgPrice" = (SELECT MAX(avgPrice) FROM recent r2 WHERE r2."vegetableId" = r."vegetableId")) as max_market,
+        COUNT(DISTINCT r."marketId") as market_count
+      FROM recent r
+      GROUP BY r."vegetableId"
+      HAVING COUNT(DISTINCT r."marketId") >= 2
+        AND MAX(r."avgPrice") > MIN(r."avgPrice")
+    )
+    SELECT a."vegetableId", v."nameEn", v."nameNe", v."nameJa", v.unit,
+      a.min_price::float as "minPrice", a.max_price::float as "maxPrice",
+      a.min_market as "minMarket", a.max_market as "maxMarket",
+      ROUND(((a.max_price - a.min_price) / NULLIF(a.min_price, 0) * 100)::numeric, 1)::float as "spreadPct"
+    FROM agg a
+    JOIN "Vegetable" v ON v.id = a."vegetableId"
+    ORDER BY "spreadPct" DESC
+    LIMIT 6
+  `
+  return rows.map(r => ({ ...r, minPrice: Number(r.minPrice), maxPrice: Number(r.maxPrice), spreadPct: Number(r.spreadPct) }))
+}
+
 function ChangeBadge({ pct }: { pct: number | null }) {
   if (pct === null) return <span className="text-zinc-500">—</span>
   const isUp = pct >= 0
@@ -127,10 +171,11 @@ export default async function HomePage({
   const sp = (await searchParams) ?? {}
   const selectedMarketId = sp.marketId
 
-  const [dict, rows, markets] = await Promise.all([
+  const [dict, rows, markets, spread] = await Promise.all([
     getDictionary(locale),
     getPriceRows(selectedMarketId),
     getMarkets(),
+    getMarketSpread(),
   ])
 
   const getName = (row: VegRow) =>
@@ -290,6 +335,45 @@ export default async function HomePage({
               </div>
             </div>
           </div>
+
+          {/* Market spread ranking */}
+          {spread.length > 0 && (
+            <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
+              <div className="flex items-baseline justify-between mb-3">
+                <h2 className="text-sm font-semibold text-yellow-400 uppercase tracking-wider">
+                  {locale === 'ne' ? '🏪 बजार मूल्य अन्तर' : locale === 'ja' ? '🏪 市場間価格差 TOP6' : '🏪 Market Price Gap TOP6'}
+                </h2>
+                <span className="text-[10px] text-zinc-500">
+                  {locale === 'ne' ? 'न्यून बजार → उच्च बजार' : locale === 'ja' ? '最安市場 → 最高市場' : 'Cheapest → Most Expensive'}
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                {spread.map((row) => {
+                  const name = locale === 'ne' ? row.nameNe : locale === 'ja' ? row.nameJa : row.nameEn
+                  return (
+                    <Link
+                      key={row.vegetableId}
+                      href={`/${locale}/vegetables/${row.vegetableId}`}
+                      className="flex items-center justify-between rounded-lg bg-zinc-800/60 border border-zinc-700/50 px-3 py-2 hover:border-zinc-500 transition-colors"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-zinc-100 truncate">{name}</p>
+                        <p className="text-[10px] text-zinc-500 truncate mt-0.5">
+                          {row.minMarket} <span className="text-zinc-600">→</span> {row.maxMarket}
+                        </p>
+                        <p className="text-[10px] text-zinc-400 font-mono mt-0.5">
+                          {row.minPrice.toFixed(0)} → {row.maxPrice.toFixed(0)} NPR/{row.unit}
+                        </p>
+                      </div>
+                      <span className="shrink-0 ml-2 text-sm font-bold font-mono text-yellow-400">
+                        +{row.spreadPct.toFixed(0)}%
+                      </span>
+                    </Link>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Full table with market tabs */}
           <div className="rounded-lg border border-zinc-800 bg-zinc-900 overflow-hidden">
