@@ -1,6 +1,5 @@
 const CACHE_NAME = 'tarkari-v1'
 const STATIC_ASSETS = [
-  '/',
   '/manifest.json',
 ]
 
@@ -24,7 +23,7 @@ self.addEventListener('fetch', (event) => {
   const { request } = event
   const url = new URL(request.url)
 
-  // Cache-first for static assets; network-first for API and pages
+  // API routes and Next.js bundles: network-first, cache as offline fallback
   if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/_next/')) {
     event.respondWith(
       fetch(request).catch(() => caches.match(request))
@@ -32,13 +31,28 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
+  // HTML pages: network-first so deploys reach users immediately.
+  // Falls back to cache only when offline.
+  if (request.headers.get('accept')?.includes('text/html')) {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (!response || response.status !== 200 || response.type === 'opaque') return response
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, response.clone()))
+          return response
+        })
+        .catch(() => caches.match(request))
+    )
+    return
+  }
+
+  // Images, fonts, and other static assets: cache-first
   event.respondWith(
     caches.match(request).then((cached) => {
       if (cached) return cached
       return fetch(request).then((response) => {
         if (!response || response.status !== 200 || response.type === 'opaque') return response
-        const clone = response.clone()
-        caches.open(CACHE_NAME).then((cache) => cache.put(request, clone))
+        caches.open(CACHE_NAME).then((cache) => cache.put(request, response.clone()))
         return response
       })
     })
