@@ -3,6 +3,7 @@ import type { Locale } from '@/types'
 import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import Link from 'next/link'
+import PriceIndexChart, { type IndexPoint } from '@/components/PriceIndexChart'
 
 export const revalidate = 43200 // cache for 12h; cron invalidates on-demand after scraping
 
@@ -116,6 +117,18 @@ type SpreadRow = {
   spreadPct: number
 }
 
+async function getIndexData(): Promise<IndexPoint[]> {
+  const since = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000)
+  const rows = await prisma.$queryRaw<Array<{ date: string; avgPrice: number }>>`
+    SELECT date::text AS date, AVG("avgPrice")::float AS "avgPrice"
+    FROM "PriceRecord"
+    WHERE date >= ${since}
+    GROUP BY date
+    ORDER BY date ASC
+  `
+  return rows.map((r) => ({ date: r.date.split('T')[0], avgPrice: Number(r.avgPrice) }))
+}
+
 async function getMarketSpread(): Promise<SpreadRow[]> {
   try {
     const since = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000)
@@ -199,11 +212,12 @@ export default async function HomePage({
   const sp = (await searchParams) ?? {}
   const selectedMarketId = sp.marketId
 
-  const [dict, rows, markets, spread] = await Promise.all([
+  const [dict, rows, markets, spread, indexData] = await Promise.all([
     getDictionary(locale),
     getPriceRows(selectedMarketId),
     getMarkets(),
     getMarketSpread(),
+    getIndexData(),
   ])
 
   const getName = (row: VegRow) =>
@@ -296,6 +310,11 @@ export default async function HomePage({
           ))}
         </div>
       </div>
+
+      {/* Price Index Chart */}
+      {indexData.length > 0 && (
+        <PriceIndexChart data={indexData} locale={locale} />
+      )}
 
       {withData.length === 0 ? (
         <div className="rounded-lg border border-zinc-800 p-8 text-center text-zinc-500">
