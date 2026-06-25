@@ -117,34 +117,62 @@ type SpreadRow = {
 }
 
 async function getMarketSpread(): Promise<SpreadRow[]> {
-  const rows = await prisma.$queryRaw<SpreadRow[]>`
-    WITH recent AS (
-      SELECT p."vegetableId", p."marketId", p."avgPrice", m."nameEn" as market_en
+  try {
+    const since = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000)
+    // Get one price per vegetable per market (most recent within 3 days)
+    const recent = await prisma.$queryRaw<Array<{
+      vegetableId: string; marketId: string; avgPrice: number; marketEn: string
+    }>>`
+      SELECT DISTINCT ON ("vegetableId", "marketId")
+        p."vegetableId", p."marketId", p."avgPrice"::float, m."nameEn" as "marketEn"
       FROM "PriceRecord" p
       JOIN "Market" m ON m.id = p."marketId"
-      WHERE p.date >= NOW() - INTERVAL '3 days'
-    ),
-    agg AS (
-      SELECT r."vegetableId",
-        MIN(r."avgPrice") as min_price, MAX(r."avgPrice") as max_price,
-        MIN(r.market_en) FILTER (WHERE r."avgPrice" = (SELECT MIN(avgPrice) FROM recent r2 WHERE r2."vegetableId" = r."vegetableId")) as min_market,
-        MIN(r.market_en) FILTER (WHERE r."avgPrice" = (SELECT MAX(avgPrice) FROM recent r2 WHERE r2."vegetableId" = r."vegetableId")) as max_market,
-        COUNT(DISTINCT r."marketId") as market_count
-      FROM recent r
-      GROUP BY r."vegetableId"
-      HAVING COUNT(DISTINCT r."marketId") >= 2
-        AND MAX(r."avgPrice") > MIN(r."avgPrice")
-    )
-    SELECT a."vegetableId", v."nameEn", v."nameNe", v."nameJa", v.unit,
-      a.min_price::float as "minPrice", a.max_price::float as "maxPrice",
-      a.min_market as "minMarket", a.max_market as "maxMarket",
-      ROUND(((a.max_price - a.min_price) / NULLIF(a.min_price, 0) * 100)::numeric, 1)::float as "spreadPct"
-    FROM agg a
-    JOIN "Vegetable" v ON v.id = a."vegetableId"
-    ORDER BY "spreadPct" DESC
-    LIMIT 6
-  `
-  return rows.map(r => ({ ...r, minPrice: Number(r.minPrice), maxPrice: Number(r.maxPrice), spreadPct: Number(r.spreadPct) }))
+      WHERE p.date >= ${since}
+      ORDER BY "vegetableId", "marketId", p.date DESC
+    `
+
+    // Group by vegetable in JS to find min/max markets
+    const byVeg = new Map<string, Array<{ avgPrice: number; marketEn: string }>>()
+    for (const r of recent) {
+      const arr = byVeg.get(r.vegetableId) ?? []
+      arr.push({ avgPrice: Number(r.avgPrice), marketEn: r.marketEn })
+      byVeg.set(r.vegetableId, arr)
+    }
+
+    // Only keep vegetables that appear in 2+ markets
+    const candidates: Array<{
+      vegetableId: string; minPrice: number; maxPrice: number
+      minMarket: string; maxMarket: string; spreadPct: number
+    }> = []
+    for (const [vegId, entries] of byVeg) {
+      if (entries.length < 2) continue
+      const sorted = [...entries].sort((a, b) => a.avgPrice - b.avgPrice)
+      const min = sorted[0], max = sorted[sorted.length - 1]
+      if (min.avgPrice <= 0) continue
+      const spreadPct = ((max.avgPrice - min.avgPrice) / min.avgPrice) * 100
+      if (spreadPct < 1) continue
+      candidates.push({ vegetableId: vegId, minPrice: min.avgPrice, maxPrice: max.avgPrice, minMarket: min.marketEn, maxMarket: max.marketEn, spreadPct })
+    }
+    candidates.sort((a, b) => b.spreadPct - a.spreadPct)
+    const top = candidates.slice(0, 6)
+
+    if (top.length === 0) return []
+    const vegIds = top.map(c => c.vegetableId)
+    const vegs = await prisma.vegetable.findMany({
+      where: { id: { in: vegIds } },
+      select: { id: true, nameEn: true, nameNe: true, nameJa: true, unit: true },
+    })
+    const vegMap = new Map(vegs.map(v => [v.id, v]))
+
+    return top.flatMap(c => {
+      const v = vegMap.get(c.vegetableId)
+      if (!v) return []
+      return [{ ...c, ...v, vegetableId: c.vegetableId, spreadPct: Math.round(c.spreadPct * 10) / 10 }]
+    })
+  } catch (e) {
+    console.error('getMarketSpread error:', e)
+    return []
+  }
 }
 
 function ChangeBadge({ pct }: { pct: number | null }) {
