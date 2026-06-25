@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import Link from 'next/link'
 
-export const revalidate = 3600 // re-fetch from DB at most once per hour
+export const revalidate = 43200 // cache for 12h; cron invalidates on-demand after scraping
 
 type VegRow = {
   id: string

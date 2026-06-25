@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 import { scrapeKalimati } from '@/lib/scraper-kalimati'
 
 export const runtime = 'nodejs'
@@ -17,6 +18,11 @@ async function run(request: NextRequest) {
   const startAt = Date.now()
   try {
     const count = await scrapeKalimati(targetDate)
+    // Invalidate ISR cache so next page load gets fresh data
+    for (const lang of ['en', 'ne', 'ja']) {
+      revalidatePath(`/${lang}`)
+      revalidatePath(`/${lang}/chart`)
+    }
     return NextResponse.json({ success: true, kalimati: count, durationMs: Date.now() - startAt })
   } catch (err) {
     console.error('[cron/scrape-kalimati]', err)

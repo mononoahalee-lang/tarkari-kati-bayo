@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 import { scrapeAmpis } from '@/lib/scraper-ampis'
 import { prisma } from '@/lib/prisma'
 
@@ -20,6 +21,10 @@ async function run(request: NextRequest) {
     await prisma.scrapeLog.create({
       data: { source: 'ampis', targetDate: today, itemsCount: count, success: true },
     })
+    for (const lang of ['en', 'ne', 'ja']) {
+      revalidatePath(`/${lang}`)
+      revalidatePath(`/${lang}/chart`)
+    }
     return NextResponse.json({ success: true, ampis: count, durationMs: Date.now() - startAt })
   } catch (err) {
     console.error('[cron/scrape-ampis]', err)

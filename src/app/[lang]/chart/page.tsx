@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import ChartExplorer from '@/components/ChartExplorer'
 
-export const revalidate = 3600 // re-fetch from DB at most once per hour
+export const revalidate = 43200 // cache for 12h; cron invalidates on-demand after scraping
 
 async function getVegetablesWithPrice() {
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
