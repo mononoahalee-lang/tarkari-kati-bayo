@@ -1,5 +1,8 @@
 import * as cheerio from 'cheerio'
+import { randomUUID } from 'crypto'
 import { prisma } from './prisma'
+
+const createId = () => randomUUID().replace(/-/g, '')
 
 const AMPIS_MARKETS = [
   { id: 5,  nameEn: 'Birtamod',      nameNe: 'बिर्तामोड',    district: 'Jhapa' },
@@ -152,13 +155,13 @@ export async function scrapeAmpis(): Promise<number> {
   const values = records
     .map(
       (_, i) =>
-        `($${i * 6 + 1}::uuid, $${i * 6 + 2}::uuid, $${i * 6 + 3}::date, $${i * 6 + 4}::float, $${i * 6 + 5}::float, $${i * 6 + 6}::float)`
+        `($${i * 7 + 1}, $${i * 7 + 2}, $${i * 7 + 3}, $${i * 7 + 4}::date, $${i * 7 + 5}, $${i * 7 + 6}, $${i * 7 + 7})`
     )
     .join(',')
-  const params = records.flatMap((r) => [r.vegId, r.marketId, today, r.min, r.max, r.avg])
+  const params = records.flatMap((r) => [createId(), r.vegId, r.marketId, today, r.min, r.max, r.avg])
 
   await prisma.$executeRawUnsafe(
-    `INSERT INTO "PriceRecord" ("vegetableId", "marketId", "date", "minPrice", "maxPrice", "avgPrice")
+    `INSERT INTO "PriceRecord" (id, "vegetableId", "marketId", "date", "minPrice", "maxPrice", "avgPrice")
      VALUES ${values}
      ON CONFLICT ("vegetableId", "marketId", "date")
      DO UPDATE SET
