@@ -15,31 +15,38 @@ const AMPIS_MARKETS = [
   { id: 15, nameEn: 'Lalbandi',      nameNe: 'लालबन्दी',      district: 'Sarlahi' },
 ]
 
+// Normalise Nepali names: remove spaces before ( to prevent duplicate records
+// when the AMPIS website toggles between "नाम (variant)" and "नाम(variant)".
+const normalizeNe = (s: string) => s.replace(/\s+\(/g, '(').trim()
+
 async function fetchMarketHtml(marketId: number): Promise<string> {
-  // Use Drupal Views AJAX endpoint — static HTML response is empty due to JS rendering
-  const body = new URLSearchParams({
-    view_name: 'bajar_price_list',
-    view_display_id: 'block_3',
-    uid_entityreference_filter: String(marketId),
-    field_commodity_category_target_id_entityreference_filter: '2',
-  })
+  try {
+    const body = new URLSearchParams({
+      view_name: 'bajar_price_list',
+      view_display_id: 'block_3',
+      uid_entityreference_filter: String(marketId),
+      field_commodity_category_target_id_entityreference_filter: '2',
+    })
 
-  const res = await fetch('https://ampis.gov.np/views/ajax', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'X-Requested-With': 'XMLHttpRequest',
-      'User-Agent': 'Mozilla/5.0 (compatible; TarkariBot/1.0)',
-    },
-    body: body.toString(),
-    next: { revalidate: 0 },
-  })
+    const res = await fetch('https://ampis.gov.np/views/ajax', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-Requested-With': 'XMLHttpRequest',
+        'User-Agent': 'Mozilla/5.0 (compatible; TarkariBot/1.0)',
+      },
+      body: body.toString(),
+      signal: AbortSignal.timeout(15000),
+      next: { revalidate: 0 },
+    })
 
-  if (!res.ok) return ''
-
-  const commands: Array<{ command: string; data?: string }> = await res.json()
-  const insertCmd = commands.find((c) => c.command === 'insert' && (c.data?.length ?? 0) > 500)
-  return insertCmd?.data ?? ''
+    if (!res.ok) return ''
+    const commands: Array<{ command: string; data?: string }> = await res.json()
+    const insertCmd = commands.find((c) => c.command === 'insert' && (c.data?.length ?? 0) > 100)
+    return insertCmd?.data ?? ''
+  } catch {
+    return ''
+  }
 }
 
 function parseRows(html: string): Array<{ nameNe: string; unit: string; min: number; max: number }> {
@@ -49,7 +56,7 @@ function parseRows(html: string): Array<{ nameNe: string; unit: string; min: num
   $('table tbody tr').each((_, tr) => {
     const tds = $(tr).find('td')
     if (tds.length < 4) return
-    const nameNe = $(tds[0]).text().trim()
+    const nameNe = normalizeNe($(tds[0]).text().trim())
     const unit = $(tds[1]).text().trim() || 'kg'
     const min = parseFloat($(tds[2]).text().replace(/,/g, '').trim())
     const max = parseFloat($(tds[3]).text().replace(/,/g, '').trim())
@@ -60,40 +67,106 @@ function parseRows(html: string): Array<{ nameNe: string; unit: string; min: num
   return rows
 }
 
+type ParsedRow = {
+  dbMarketId: string
+  nameNe: string
+  unit: string
+  min: number
+  max: number
+}
+
 export async function scrapeAmpis(): Promise<number> {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
-  let saved = 0
-
-  for (const marketDef of AMPIS_MARKETS) {
-    const market = await prisma.market.upsert({
-      where: { nameEn: marketDef.nameEn },
-      update: {},
-      create: { nameEn: marketDef.nameEn, nameNe: marketDef.nameNe, district: marketDef.district, source: 'ampis' },
-    })
-
-    const html = await fetchMarketHtml(marketDef.id)
-    const rows = parseRows(html)
-
-    for (const row of rows) {
-      const avg = (row.min + row.max) / 2
-      const vegetable = await prisma.vegetable.upsert({
-        where: { nameNe: row.nameNe },
+  // 1. Ensure all markets exist in DB (parallel upserts — fast, small set)
+  const dbMarkets = await Promise.all(
+    AMPIS_MARKETS.map((m) =>
+      prisma.market.upsert({
+        where: { nameEn: m.nameEn },
         update: {},
-        create: { nameNe: row.nameNe, nameEn: row.nameNe, nameJa: row.nameNe, unit: row.unit },
+        create: { nameEn: m.nameEn, nameNe: m.nameNe, district: m.district, source: 'ampis' },
       })
+    )
+  )
 
-      await prisma.priceRecord.upsert({
-        where: { vegetableId_marketId_date: { vegetableId: vegetable.id, marketId: market.id, date: today } },
-        update: { minPrice: row.min, maxPrice: row.max, avgPrice: avg },
-        create: { vegetableId: vegetable.id, marketId: market.id, date: today, minPrice: row.min, maxPrice: row.max, avgPrice: avg },
-      })
-      saved++
+  // 2. Fetch all market HTML in parallel (network I/O, no DB involved)
+  const htmls = await Promise.all(AMPIS_MARKETS.map((m) => fetchMarketHtml(m.id)))
+
+  // 3. Parse and collect all rows (no DB at this stage)
+  const allRows: ParsedRow[] = []
+  for (let i = 0; i < AMPIS_MARKETS.length; i++) {
+    const parsed = parseRows(htmls[i])
+    for (const row of parsed) {
+      allRows.push({ dbMarketId: dbMarkets[i].id, ...row })
     }
-
-    await new Promise((r) => setTimeout(r, 400))
   }
 
-  return saved
+  if (allRows.length === 0) return 0
+
+  // 4. Batch-lookup all vegetables by both normalised and space-prefixed names
+  //    (space-prefixed lookup catches legacy DB records created before normaliseNe was applied)
+  const normalizedNames = [...new Set(allRows.map((r) => r.nameNe))]
+  const withSpaceNames = normalizedNames.map((n) => n.replace(/\(/g, ' ('))
+  const allLookupNames = [...new Set([...normalizedNames, ...withSpaceNames])]
+
+  const existing = await prisma.vegetable.findMany({
+    where: { nameNe: { in: allLookupNames } },
+    select: { id: true, nameNe: true },
+  })
+
+  // Map both the stored form and its normalised form to the same id
+  const vegMap = new Map<string, string>()
+  for (const v of existing) {
+    vegMap.set(v.nameNe, v.id)
+    vegMap.set(normalizeNe(v.nameNe), v.id)
+  }
+
+  // 5. Create vegetables that don't exist yet (single batch)
+  const missing = normalizedNames.filter((n) => !vegMap.has(n))
+  if (missing.length > 0) {
+    await prisma.vegetable.createMany({
+      data: missing.map((n) => {
+        const row = allRows.find((r) => r.nameNe === n)!
+        return { nameNe: n, nameEn: n, nameJa: n, unit: row.unit }
+      }),
+      skipDuplicates: true,
+    })
+    const newVegs = await prisma.vegetable.findMany({
+      where: { nameNe: { in: missing } },
+      select: { id: true, nameNe: true },
+    })
+    for (const v of newVegs) vegMap.set(v.nameNe, v.id)
+  }
+
+  // 6. Single bulk upsert for all price records
+  const records = allRows.flatMap((row) => {
+    const vegId = vegMap.get(row.nameNe)
+    if (!vegId) return []
+    const avg = (row.min + row.max) / 2
+    return [{ vegId, marketId: row.dbMarketId, min: row.min, max: row.max, avg }]
+  })
+
+  if (records.length === 0) return 0
+
+  const values = records
+    .map(
+      (_, i) =>
+        `($${i * 6 + 1}::uuid, $${i * 6 + 2}::uuid, $${i * 6 + 3}::date, $${i * 6 + 4}::float, $${i * 6 + 5}::float, $${i * 6 + 6}::float)`
+    )
+    .join(',')
+  const params = records.flatMap((r) => [r.vegId, r.marketId, today, r.min, r.max, r.avg])
+
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "PriceRecord" ("vegetableId", "marketId", "date", "minPrice", "maxPrice", "avgPrice")
+     VALUES ${values}
+     ON CONFLICT ("vegetableId", "marketId", "date")
+     DO UPDATE SET
+       "minPrice" = EXCLUDED."minPrice",
+       "maxPrice" = EXCLUDED."maxPrice",
+       "avgPrice" = EXCLUDED."avgPrice"`,
+    ...params
+  )
+
+  return records.length
 }
