@@ -85,6 +85,15 @@ export type AmpisScrapeResult = {
   markets: AmpisMarketResult[]
 }
 
+// AMPIS itself sometimes doesn't publish a market's table for the day (no rows,
+// no date header at all) — that's an upstream data gap, not a scraper failure.
+// Surface it plainly in ScrapeLog instead of letting a "success" run hide it.
+export function describeZeroRowMarkets(markets: AmpisMarketResult[]): string | null {
+  const zeroRowMarkets = markets.filter((m) => m.rows === 0).map((m) => m.nameEn)
+  if (zeroRowMarkets.length === 0) return null
+  return `AMPIS未公開 (0件): ${zeroRowMarkets.join(', ')}`
+}
+
 export async function scrapeAmpis(): Promise<AmpisScrapeResult> {
   const today = new Date()
   today.setHours(0, 0, 0, 0)

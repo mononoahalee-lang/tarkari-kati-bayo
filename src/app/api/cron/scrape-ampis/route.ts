@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
-import { scrapeAmpis } from '@/lib/scraper-ampis'
+import { scrapeAmpis, describeZeroRowMarkets } from '@/lib/scraper-ampis'
 import { prisma } from '@/lib/prisma'
 
 export const runtime = 'nodejs'
@@ -18,10 +18,7 @@ async function run(request: NextRequest) {
 
   try {
     const result = await scrapeAmpis()
-    const zeroRowMarkets = result.markets.filter((m) => m.rows === 0).map((m) => m.nameEn)
-    const message = zeroRowMarkets.length > 0
-      ? `0 rows for: ${zeroRowMarkets.join(', ')}`
-      : null
+    const message = describeZeroRowMarkets(result.markets)
     await prisma.scrapeLog.create({
       data: { source: 'ampis', targetDate: today, itemsCount: result.total, success: true, message },
     })

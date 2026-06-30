@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { scrapeKalimati } from '@/lib/scraper-kalimati'
-import { scrapeAmpis } from '@/lib/scraper-ampis'
+import { scrapeAmpis, describeZeroRowMarkets } from '@/lib/scraper-ampis'
 import { prisma } from '@/lib/prisma'
 
 export const runtime = 'nodejs'
@@ -35,8 +35,7 @@ async function runScrape(request: NextRequest) {
       data: { source: 'ampis', targetDate: today, itemsCount: 0, success: false, message: String(ampisResult.reason).slice(0, 200) },
     })
   } else {
-    const zeroRowMarkets = ampisResult.value.markets.filter((m) => m.rows === 0).map((m) => m.nameEn)
-    const message = zeroRowMarkets.length > 0 ? `0 rows for: ${zeroRowMarkets.join(', ')}` : null
+    const message = describeZeroRowMarkets(ampisResult.value.markets)
     await prisma.scrapeLog.create({
       data: { source: 'ampis', targetDate: today, itemsCount: ampisCount, success: true, message },
     })
