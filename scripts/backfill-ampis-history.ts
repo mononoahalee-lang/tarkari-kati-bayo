@@ -20,11 +20,13 @@ const AMPIS_MARKETS = [
 ]
 
 // AMPIS's historical filter only exposes a year taxonomy term for BS years it has
-// archived pages for; 2083 (current BS year) has no term yet, so dates from
-// 2026-04-14 onward cannot be backfilled this way (the daily cron covers those).
+// archived a page for. Re-verify this list against the live <select> before extending
+// the range further back — terms appear to be added incrementally as years pass.
 const YEAR_ENTITY_ID: Record<number, number> = {
+  2080: 16,
   2081: 446538,
   2082: 894719,
+  2083: 1614822,
 }
 
 // Month term ids run 33 (Baisakh, BS month index 0) .. 44 (Chaitra, index 11) sequentially.
@@ -143,9 +145,11 @@ async function main() {
   const limitArg = process.argv.find((a) => a.startsWith('--limit-days='))
   const marketArg = process.argv.find((a) => a.startsWith('--market='))
   const startArg = process.argv.find((a) => a.startsWith('--start='))
+  const endArg = process.argv.find((a) => a.startsWith('--end='))
 
-  const RANGE_START = startArg ? new Date(startArg.split('=')[1] + 'T00:00:00Z') : new Date('2025-01-01T00:00:00Z')
-  const RANGE_END = new Date('2026-04-13T00:00:00Z') // last day BS2082 covers; 2083 has no year term yet
+  const RANGE_START = startArg ? new Date(startArg.split('=')[1] + 'T00:00:00Z') : new Date('2024-01-01T00:00:00Z')
+  const todayUTC = new Date(new Date().toISOString().split('T')[0] + 'T00:00:00Z')
+  const RANGE_END = endArg ? new Date(endArg.split('=')[1] + 'T00:00:00Z') : todayUTC
   const maxDays = limitArg ? parseInt(limitArg.split('=')[1], 10) : Infinity
   const onlyMarket = marketArg ? marketArg.split('=')[1] : null
 
