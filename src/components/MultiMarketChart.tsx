@@ -36,20 +36,30 @@ function getMarketName(p: { marketNameEn: string; marketNameNe: string }, locale
   return locale === 'ne' ? p.marketNameNe : p.marketNameEn
 }
 
+function hexToRgba(hex: string, alpha: number) {
+  const r = parseInt(hex.slice(1, 3), 16)
+  const g = parseInt(hex.slice(3, 5), 16)
+  const b = parseInt(hex.slice(5, 7), 16)
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
+
 const UI: Record<Locale, {
-  noData: string; market: string; latest: string; low: string; high: string; lastUpdate: string
+  noData: string; market: string; latest: string; low: string; high: string; lastUpdate: string; clickHint: string
   periods: Record<Period, string>
 }> = {
   ne: {
     noData: 'डेटा उपलब्ध छैन', market: 'बजार', latest: 'हालको मूल्य', low: 'न्यूनतम', high: 'अधिकतम', lastUpdate: 'अन्तिम अद्यावधिक',
+    clickHint: 'कुनै बजारमा क्लिक गरेर त्यसको लाइन हाइलाइट गर्नुहोस्',
     periods: { '1M': '१ म', '3M': '३ म', '1Y': '१ व', ALL: 'सबै' },
   },
   en: {
     noData: 'No data available', market: 'Market', latest: 'Latest', low: 'Low', high: 'High', lastUpdate: 'Last update',
+    clickHint: 'Click a market to highlight its line',
     periods: { '1M': '1M', '3M': '3M', '1Y': '1Y', ALL: 'All' },
   },
   ja: {
     noData: 'データがありません', market: '市場', latest: '最新価格', low: '最安値', high: '最高値', lastUpdate: '最終更新',
+    clickHint: '市場名をクリックすると、その線をハイライト表示します',
     periods: { '1M': '1ヶ月', '3M': '3ヶ月', '1Y': '1年', ALL: '全期間' },
   },
 }
@@ -65,6 +75,7 @@ export default function MultiMarketChart({ data, locale }: Props) {
   const chartRef = useRef<IChartApi | null>(null)
   const seriesMapRef = useRef<Map<string, ISeriesApi<'Line'>>>(new Map())
   const [period, setPeriod] = useState<Period>('3M')
+  const [highlighted, setHighlighted] = useState<string | null>(null)
 
   const marketIds = [...new Set(data.map((d) => d.marketId))]
   const marketMeta = new Map(marketIds.map((id) => [id, data.find((d) => d.marketId === id)!]))
@@ -145,6 +156,20 @@ export default function MultiMarketChart({ data, locale }: Props) {
     chart.timeScale().fitContent()
   }, [data, period]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Dim every line except the highlighted one so a crowded chart stays readable.
+  useEffect(() => {
+    for (const [marketId, series] of seriesMapRef.current) {
+      const baseColor = colorFor(marketId)
+      if (highlighted === null) {
+        series.applyOptions({ color: baseColor, lineWidth: 2 })
+      } else if (marketId === highlighted) {
+        series.applyOptions({ color: baseColor, lineWidth: 3 })
+      } else {
+        series.applyOptions({ color: hexToRgba(baseColor, 0.12), lineWidth: 1 })
+      }
+    }
+  }, [highlighted, data, period]) // eslint-disable-line react-hooks/exhaustive-deps
+
   if (data.length === 0) {
     return <p className="text-sm text-zinc-500 py-8 text-center">{ui.noData}</p>
   }
@@ -176,6 +201,7 @@ export default function MultiMarketChart({ data, locale }: Props) {
         ))}
       </div>
       <div ref={containerRef} />
+      <p className="px-4 pt-3 text-xs text-zinc-600">{ui.clickHint}</p>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -188,18 +214,30 @@ export default function MultiMarketChart({ data, locale }: Props) {
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
-              <tr key={r.marketId} className="border-t border-zinc-800/60">
-                <td className="px-4 py-2 text-zinc-200">
-                  <span className="inline-block w-2.5 h-2.5 rounded-full mr-2" style={{ backgroundColor: colorFor(r.marketId) }} />
-                  {getMarketName(r.meta, locale)}
-                </td>
-                <td className="px-4 py-2 text-right font-mono text-zinc-100">{r.latest!.avgPrice.toFixed(2)}</td>
-                <td className="px-4 py-2 text-right font-mono text-zinc-500">{r.low}</td>
-                <td className="px-4 py-2 text-right font-mono text-zinc-500">{r.high}</td>
-                <td className="px-4 py-2 text-right font-mono text-zinc-500">{r.latest!.date}</td>
-              </tr>
-            ))}
+            {rows.map((r) => {
+              const isHighlighted = highlighted === r.marketId
+              return (
+                <tr
+                  key={r.marketId}
+                  onClick={() => setHighlighted(isHighlighted ? null : r.marketId)}
+                  className={`border-t border-zinc-800/60 cursor-pointer transition-colors ${
+                    isHighlighted ? 'bg-zinc-800' : 'hover:bg-zinc-800/40'
+                  }`}
+                >
+                  <td className={`px-4 py-2 ${isHighlighted ? 'text-white font-medium' : 'text-zinc-200'}`}>
+                    <span
+                      className={`inline-block w-2.5 h-2.5 rounded-full mr-2 ${isHighlighted ? 'ring-2 ring-white/60' : ''}`}
+                      style={{ backgroundColor: colorFor(r.marketId) }}
+                    />
+                    {getMarketName(r.meta, locale)}
+                  </td>
+                  <td className="px-4 py-2 text-right font-mono text-zinc-100">{r.latest!.avgPrice.toFixed(2)}</td>
+                  <td className="px-4 py-2 text-right font-mono text-zinc-500">{r.low}</td>
+                  <td className="px-4 py-2 text-right font-mono text-zinc-500">{r.high}</td>
+                  <td className="px-4 py-2 text-right font-mono text-zinc-500">{r.latest!.date}</td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
