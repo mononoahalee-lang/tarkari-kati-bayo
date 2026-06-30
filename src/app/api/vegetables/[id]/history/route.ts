@@ -59,7 +59,17 @@ export async function GET(
     }
   }
 
-  const sorted = Array.from(dateMap.entries()).sort(([a], [b]) => a.localeCompare(b))
+  // In "All Markets" mode, a day where only one market reported isn't actually an
+  // average — it's that single market's price standing in for the whole country.
+  // For thinly-reported vegetables this creates sharp single-day spikes/dips that
+  // look like real price moves but are really just which market happened to post
+  // that day. Drop those days from the combined line (per-market view is unaffected
+  // since count is always 1 there by definition).
+  const entries = marketId
+    ? Array.from(dateMap.entries())
+    : Array.from(dateMap.entries()).filter(([, d]) => d.count >= 2)
+
+  const sorted = entries.sort(([a], [b]) => a.localeCompare(b))
 
   const candlesticks = sorted.map(([date, d], i) => {
     const avg = d.avgSum / d.count

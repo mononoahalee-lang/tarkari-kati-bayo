@@ -39,7 +39,15 @@ async function getVegetableData(id: string, days: number) {
     entry.avg.push(r.avgPrice)
   }
 
-  const dateKeys = Array.from(byDate.keys()).sort()
+  // A day where only one market reported isn't actually a cross-market average —
+  // it's that single market's price standing in for the whole country. For
+  // thinly-reported vegetables this creates sharp single-day spikes/dips that
+  // look like real price moves but really just reflect which market posted that
+  // day, so they're dropped from this combined-markets view.
+  const dateKeys = Array.from(byDate.entries())
+    .filter(([, e]) => e.avg.length >= 2)
+    .map(([key]) => key)
+    .sort()
   const candlesticks: CandlestickPoint[] = dateKeys.map((key, i) => {
     const entry = byDate.get(key)!
     const avgPrice = entry.avg.reduce((a, b) => a + b, 0) / entry.avg.length
