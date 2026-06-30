@@ -110,42 +110,44 @@ export async function scrapeKalimati(targetDate?: Date): Promise<number> {
     newVegs.forEach((v) => vegMap.set(v.nameNe, v.id))
   }
 
-  // Bulk upsert price records via raw SQL
-  const values = rows
-    .map((r) => {
-      const vegId = vegMap.get(r.nameNe)
-      if (!vegId) return null
-      return { vegId, min: r.min, max: r.max, avg: r.avg }
-    })
-    .filter(Boolean) as Array<{ vegId: string; min: number; max: number; avg: number }>
+  // Bulk upsert price records via raw SQL. Dedupe by vegId: a single Postgres
+  // statement can't UPDATE the same ON CONFLICT target row twice, and a
+  // duplicate-rendered Kalimati row would otherwise crash the whole save.
+  const byVeg = new Map<string, { vegId: string; min: number; max: number; avg: number }>()
+  for (const r of rows) {
+    const vegId = vegMap.get(r.nameNe)
+    if (!vegId) continue
+    byVeg.set(vegId, { vegId, min: r.min, max: r.max, avg: r.avg })
+  }
+  const values = [...byVeg.values()]
 
   if (values.length > 0) {
-    // Build bulk upsert: INSERT ... ON CONFLICT DO UPDATE
     const dateStr = actualDate.toISOString().split('T')[0]
-    const placeholders = values.map((_, i) => {
-      const base = i * 6
-      return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}::date, $${base + 5}, $${base + 6})`
-    }).join(', ')
-    const params: (string | number)[] = values.flatMap((v) => [
-      createId(), v.vegId, market.id, dateStr, v.min, v.max,
-    ])
-    // Append avg to params — rebuild to include avg
-    const params2: (string | number)[] = []
-    const placeholders2 = values.map((v, i) => {
+    const params: (string | number)[] = []
+    const placeholders = values.map((v, i) => {
       const base = i * 7
-      params2.push(createId(), v.vegId, market.id, dateStr, v.min, v.max, v.avg)
+      params.push(createId(), v.vegId, market.id, dateStr, v.min, v.max, v.avg)
       return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}::date, $${base + 5}, $${base + 6}, $${base + 7})`
     }).join(', ')
 
     await prisma.$executeRawUnsafe(`
       INSERT INTO "PriceRecord" (id, "vegetableId", "marketId", date, "minPrice", "maxPrice", "avgPrice")
-      VALUES ${placeholders2}
+      VALUES ${placeholders}
       ON CONFLICT ("vegetableId", "marketId", date) DO UPDATE SET
         "minPrice" = EXCLUDED."minPrice",
         "maxPrice" = EXCLUDED."maxPrice",
         "avgPrice" = EXCLUDED."avgPrice"
-    `, ...params2)
+    `, ...params)
   }
+
+  // Flag a sharp drop vs. yesterday's saved count — usually means Kalimati served
+  // a partial/broken table rather than a parser bug on our side.
+  const yesterdayForDrop = new Date(actualDate)
+  yesterdayForDrop.setDate(yesterdayForDrop.getDate() - 1)
+  const prevCount = await prisma.priceRecord.count({ where: { marketId: market.id, date: yesterdayForDrop } })
+  const dropMessage = prevCount >= 5 && values.length > 0 && values.length <= prevCount * 0.4
+    ? `件数急減 (${prevCount}→${values.length}件)`
+    : null
 
   console.log(`[Kalimati] Saved ${values.length} records for ${actualDate.toISOString().split('T')[0]}`)
   await prisma.scrapeLog.create({
@@ -154,9 +156,9 @@ export async function scrapeKalimati(targetDate?: Date): Promise<number> {
       targetDate: actualDate,
       itemsCount: values.length,
       success: true,
-      message: actualDate.toISOString().split('T')[0] === today.toISOString().split('T')[0]
+      message: dropMessage ?? (actualDate.toISOString().split('T')[0] === today.toISOString().split('T')[0]
         ? null
-        : `Used fallback date (yesterday)`,
+        : `Used fallback date (yesterday)`),
     },
   })
   return values.length

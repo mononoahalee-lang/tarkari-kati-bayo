@@ -83,6 +83,7 @@ export type AmpisMarketResult = { nameEn: string; rows: number }
 export type AmpisScrapeResult = {
   total: number
   markets: AmpisMarketResult[]
+  message: string | null
 }
 
 // AMPIS itself sometimes doesn't publish a market's table for the day (no rows,
@@ -92,6 +93,26 @@ export function describeZeroRowMarkets(markets: AmpisMarketResult[]): string | n
   const zeroRowMarkets = markets.filter((m) => m.rows === 0).map((m) => m.nameEn)
   if (zeroRowMarkets.length === 0) return null
   return `AMPIS未公開 (0件): ${zeroRowMarkets.join(', ')}`
+}
+
+// A market reporting far fewer rows than yesterday (but not zero) usually means
+// AMPIS published a partial/broken table rather than a parser bug on our side —
+// still worth a visible flag since "success: true" would otherwise hide it.
+function describeRowCountDrops(
+  markets: AmpisMarketResult[],
+  dbMarketIds: string[],
+  yesterdayCounts: Map<string, number>
+): string | null {
+  const drops: string[] = []
+  for (let i = 0; i < markets.length; i++) {
+    const prev = yesterdayCounts.get(dbMarketIds[i]) ?? 0
+    const curr = markets[i].rows
+    if (prev >= 5 && curr > 0 && curr <= prev * 0.4) {
+      drops.push(`${markets[i].nameEn} (${prev}→${curr}件)`)
+    }
+  }
+  if (drops.length === 0) return null
+  return `件数急減: ${drops.join(', ')}`
 }
 
 export async function scrapeAmpis(): Promise<AmpisScrapeResult> {
@@ -123,7 +144,23 @@ export async function scrapeAmpis(): Promise<AmpisScrapeResult> {
     }
   }
 
-  if (allRows.length === 0) return { total: 0, markets: marketResults }
+  const dbMarketIds = dbMarkets.map((m) => m.id)
+  const yesterday = new Date(today)
+  yesterday.setDate(yesterday.getDate() - 1)
+  const yesterdayCounts = await prisma.priceRecord.groupBy({
+    by: ['marketId'],
+    where: { marketId: { in: dbMarketIds }, date: yesterday },
+    _count: { _all: true },
+  })
+  const yesterdayCountMap = new Map(yesterdayCounts.map((c) => [c.marketId, c._count._all]))
+  const message = [
+    describeZeroRowMarkets(marketResults),
+    describeRowCountDrops(marketResults, dbMarketIds, yesterdayCountMap),
+  ]
+    .filter((m): m is string => m !== null)
+    .join(' / ') || null
+
+  if (allRows.length === 0) return { total: 0, markets: marketResults, message }
 
   // 4. Batch-lookup all vegetables by both normalised and space-prefixed names
   //    (space-prefixed lookup catches legacy DB records created before normaliseNe was applied)
@@ -160,15 +197,21 @@ export async function scrapeAmpis(): Promise<AmpisScrapeResult> {
     for (const v of newVegs) vegMap.set(v.nameNe, v.id)
   }
 
-  // 6. Single bulk upsert for all price records
-  const records = allRows.flatMap((row) => {
+  // 6. Single bulk upsert for all price records. Dedupe by (vegId, marketId): a
+  // single Postgres statement can't UPDATE the same ON CONFLICT target row twice,
+  // and a duplicate-rendered AMPIS row would otherwise crash the whole batch —
+  // taking every market down for the day, not just the one with the bad row.
+  const byVegMarket = new Map<string, { vegId: string; marketId: string; min: number; max: number; avg: number }>()
+  for (const row of allRows) {
     const vegId = vegMap.get(row.nameNe)
-    if (!vegId) return []
-    const avg = (row.min + row.max) / 2
-    return [{ vegId, marketId: row.dbMarketId, min: row.min, max: row.max, avg }]
-  })
+    if (!vegId) continue
+    byVegMarket.set(`${vegId}|${row.dbMarketId}`, {
+      vegId, marketId: row.dbMarketId, min: row.min, max: row.max, avg: (row.min + row.max) / 2,
+    })
+  }
+  const records = [...byVegMarket.values()]
 
-  if (records.length === 0) return { total: 0, markets: marketResults }
+  if (records.length === 0) return { total: 0, markets: marketResults, message }
 
   const values = records
     .map(
@@ -189,5 +232,5 @@ export async function scrapeAmpis(): Promise<AmpisScrapeResult> {
     ...params
   )
 
-  return { total: records.length, markets: marketResults }
+  return { total: records.length, markets: marketResults, message }
 }
