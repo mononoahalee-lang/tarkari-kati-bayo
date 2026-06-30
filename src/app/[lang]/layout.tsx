@@ -53,6 +53,9 @@ export default async function LangLayout({
               <Link href={`/${locale}/chart`} className="text-zinc-200 hover:text-white transition-colors px-1">
                 {dict.nav.chart}
               </Link>
+              <Link href={`/${locale}/compare`} className="text-zinc-200 hover:text-white transition-colors px-1">
+                {dict.nav.compare}
+              </Link>
               <Link href={`/${locale}/news`} className="hidden sm:block text-zinc-200 hover:text-white transition-colors px-1">
                 {dict.nav.news}
               </Link>
@@ -91,6 +94,10 @@ export default async function LangLayout({
           <Link href={`/${locale}/chart`} className="flex flex-col items-center gap-0.5 text-zinc-400 hover:text-white transition-colors px-2 py-1">
             <span className="text-lg leading-none">📈</span>
             <span className="text-[10px]">{dict.nav.chart}</span>
+          </Link>
+          <Link href={`/${locale}/compare`} className="flex flex-col items-center gap-0.5 text-zinc-400 hover:text-white transition-colors px-2 py-1">
+            <span className="text-lg leading-none">⚖️</span>
+            <span className="text-[10px]">{dict.nav.compare}</span>
           </Link>
           <Link href={`/${locale}/field-work`} className="flex flex-col items-center gap-0.5 text-zinc-400 hover:text-white transition-colors px-2 py-1">
             <span className="text-lg leading-none">📋</span>
