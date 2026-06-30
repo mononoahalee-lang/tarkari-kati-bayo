@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { toDateStr, isStaleDateStr } from '@/lib/freshness'
 
 export const runtime = 'nodejs'
 export const revalidate = 3600
@@ -23,6 +24,12 @@ export async function GET(
     include: { market: true },
   })
 
+  // All records share the same (most recent overall) date for this vegetable,
+  // so a single staleness check applies to the whole comparison set — if every
+  // market is stuck on the same old date, the client can flag it explicitly.
+  const dateStr = toDateStr(latest.date)
+  const isStale = isStaleDateStr(dateStr)
+
   const result = records.map((r) => ({
     marketId: r.marketId,
     marketNameEn: r.market.nameEn,
@@ -31,7 +38,8 @@ export async function GET(
     minPrice: r.minPrice,
     maxPrice: r.maxPrice,
     avgPrice: r.avgPrice,
-    date: r.date.toISOString().split('T')[0],
+    date: dateStr,
+    isStale,
   }))
 
   return NextResponse.json(result)

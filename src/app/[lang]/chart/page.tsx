@@ -3,6 +3,7 @@ import type { Locale } from '@/types'
 import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import ChartExplorer from '@/components/ChartExplorer'
+import { toDateStr, isStaleDateStr } from '@/lib/freshness'
 
 export const revalidate = 43200 // cache for 12h; cron invalidates on-demand after scraping
 
@@ -15,8 +16,8 @@ async function getVegetablesWithPrice() {
       select: { id: true, nameNe: true, nameEn: true, nameJa: true, unit: true },
       orderBy: { nameEn: 'asc' },
     }),
-    prisma.$queryRaw<Array<{ vegetableId: string; avgPrice: number }>>`
-      SELECT DISTINCT ON ("vegetableId") "vegetableId", "avgPrice"
+    prisma.$queryRaw<Array<{ vegetableId: string; avgPrice: number; date: Date }>>`
+      SELECT DISTINCT ON ("vegetableId") "vegetableId", "avgPrice", "date"
       FROM "PriceRecord"
       ORDER BY "vegetableId", "date" DESC
     `,
@@ -35,14 +36,18 @@ async function getVegetablesWithPrice() {
     }),
   ])
 
-  const latestMap = new Map(latestPerVeg.map((r) => [r.vegetableId, Number(r.avgPrice)]))
+  const latestMap = new Map(
+    latestPerVeg.map((r) => [r.vegetableId, { avgPrice: Number(r.avgPrice), date: toDateStr(r.date) }])
+  )
   const prevMap = new Map(prevPerVeg.map((r) => [r.vegetableId, Number(r.avgPrice)]))
   const rangeMap = new Map(rangePerVeg.map((r) => [r.vegetableId, r]))
 
   return vegetables
     .filter((v) => rangeMap.has(v.id)) // exclude vegetables with no data in the last 365 days
     .map((v) => {
-      const avg = latestMap.get(v.id) ?? null
+      const latest = latestMap.get(v.id) ?? null
+      const isStale = isStaleDateStr(latest?.date ?? null)
+      const avg = !isStale ? latest?.avgPrice ?? null : null
       const prev = prevMap.get(v.id) ?? null
       const range = rangeMap.get(v.id)
       const changePct = avg !== null && prev !== null && prev > 0 ? ((avg - prev) / prev) * 100 : null
@@ -52,14 +57,26 @@ async function getVegetablesWithPrice() {
         changePct,
         min52w: range?._min?.avgPrice ?? null,
         max52w: range?._max?.avgPrice ?? null,
+        isStale,
+        lastDate: latest?.date ?? null,
       }
     })
 }
 
 async function getMarkets() {
-  return prisma.market.findMany({
-    select: { id: true, nameEn: true, nameNe: true, district: true },
-    orderBy: { nameEn: 'asc' },
+  const [markets, latestPerMarket] = await Promise.all([
+    prisma.market.findMany({
+      select: { id: true, nameEn: true, nameNe: true, district: true },
+      orderBy: { nameEn: 'asc' },
+    }),
+    prisma.$queryRaw<Array<{ marketId: string; latest: Date }>>`
+      SELECT "marketId", MAX(date) as latest FROM "PriceRecord" GROUP BY "marketId"
+    `,
+  ])
+  const latestMap = new Map(latestPerMarket.map((r) => [r.marketId, toDateStr(r.latest)]))
+  return markets.map((m) => {
+    const latestDate = latestMap.get(m.id) ?? null
+    return { ...m, isStale: isStaleDateStr(latestDate) }
   })
 }
 

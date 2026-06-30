@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import Link from 'next/link'
 import PriceIndexChart, { type IndexPoint } from '@/components/PriceIndexChart'
+import { toDateStr, isStaleDateStr } from '@/lib/freshness'
 
 export const revalidate = 43200 // cache for 12h; cron invalidates on-demand after scraping
 
@@ -18,6 +19,7 @@ type VegRow = {
   maxPrice: number | null
   changePct: number | null
   date: string | null
+  isStale: boolean
 }
 
 type MarketInfo = {
@@ -26,22 +28,33 @@ type MarketInfo = {
   nameNe: string
   source: string
   recordCount: number
+  latestDate: string | null
+  isStale: boolean
 }
 
 async function getMarkets(): Promise<MarketInfo[]> {
-  const markets = await prisma.market.findMany({
-    select: {
-      id: true,
-      nameEn: true,
-      nameNe: true,
-      source: true,
-      _count: { select: { prices: true } },
-    },
-    orderBy: [{ source: 'asc' }, { nameEn: 'asc' }],
-  })
+  const [markets, latestPerMarket] = await Promise.all([
+    prisma.market.findMany({
+      select: {
+        id: true,
+        nameEn: true,
+        nameNe: true,
+        source: true,
+        _count: { select: { prices: true } },
+      },
+      orderBy: [{ source: 'asc' }, { nameEn: 'asc' }],
+    }),
+    prisma.$queryRaw<Array<{ marketId: string; latest: Date }>>`
+      SELECT "marketId", MAX(date) as latest FROM "PriceRecord" GROUP BY "marketId"
+    `,
+  ])
+  const latestMap = new Map(latestPerMarket.map((r) => [r.marketId, toDateStr(r.latest)]))
   return markets
     .filter((m) => m._count.prices > 0)
-    .map((m) => ({ ...m, recordCount: m._count.prices }))
+    .map((m) => {
+      const latestDate = latestMap.get(m.id) ?? null
+      return { ...m, recordCount: m._count.prices, latestDate, isStale: isStaleDateStr(latestDate) }
+    })
 }
 
 async function getPriceRows(marketId?: string): Promise<VegRow[]> {
@@ -88,18 +101,21 @@ async function getPriceRows(marketId?: string): Promise<VegRow[]> {
 
   return vegetables.map((v) => {
     const latest = latestMap.get(v.id)
+    const dateStr = latest?.date ? toDateStr(latest.date) : null
+    const isStale = isStaleDateStr(dateStr)
     const prevAvg = prevMap.get(v.id) ?? null
     const changePct =
-      latest?.avgPrice && prevAvg && prevAvg > 0
+      !isStale && latest?.avgPrice && prevAvg && prevAvg > 0
         ? ((latest.avgPrice - prevAvg) / prevAvg) * 100
         : null
     return {
       ...v,
-      avgPrice: latest?.avgPrice ?? null,
-      minPrice: latest?.minPrice ?? null,
-      maxPrice: latest?.maxPrice ?? null,
+      avgPrice: isStale ? null : latest?.avgPrice ?? null,
+      minPrice: isStale ? null : latest?.minPrice ?? null,
+      maxPrice: isStale ? null : latest?.maxPrice ?? null,
       changePct,
-      date: latest?.date ? String(latest.date).split('T')[0] : null,
+      date: dateStr,
+      isStale,
     }
   })
 }
@@ -223,12 +239,20 @@ export default async function HomePage({
   const getName = (row: VegRow) =>
     locale === 'ne' ? row.nameNe : locale === 'ja' ? row.nameJa : row.nameEn
 
-  const withData = rows.filter((r) => r.avgPrice !== null)
-  const gainers = [...withData]
+  // Rows that have ever had a price record, even if the latest one is stale.
+  // Stale rows are kept visible (avgPrice null) instead of silently dropped,
+  // so missing data is explicit rather than indistinguishable from "no data ever".
+  const withData = rows.filter((r) => r.date !== null)
+  const freshRows = withData.filter((r) => r.avgPrice !== null)
+  const lastUpdated = withData.reduce<string | null>(
+    (max, r) => (r.date && (!max || r.date > max) ? r.date : max),
+    null
+  )
+  const gainers = [...freshRows]
     .filter((r) => (r.changePct ?? 0) > 0)
     .sort((a, b) => (b.changePct ?? 0) - (a.changePct ?? 0))
     .slice(0, 5)
-  const losers = [...withData]
+  const losers = [...freshRows]
     .filter((r) => (r.changePct ?? 0) < 0)
     .sort((a, b) => (a.changePct ?? 0) - (b.changePct ?? 0))
     .slice(0, 5)
@@ -261,11 +285,21 @@ export default async function HomePage({
         <div>
           <h1 className="text-2xl font-bold text-zinc-100">{dict.home.title}</h1>
           <p className="text-sm text-zinc-400 mt-1">{dict.home.subtitle}</p>
-          {withData[0]?.date && (
+          {lastUpdated && (
             <p className="text-xs text-zinc-500 mt-1">
-              {dict.home.updated}: {withData[0].date}
+              {dict.home.updated}: {lastUpdated}
               {' · '}
               <span className="text-zinc-400 font-medium">{sourceInfo}</span>
+            </p>
+          )}
+          {selectedMarket?.isStale && (
+            <p className="text-xs text-amber-500 mt-1">
+              ⚠ {selectedMarket.nameEn}{' '}
+              {locale === 'ja'
+                ? `のデータは最新ではありません（最終更新: ${selectedMarket.latestDate}）`
+                : locale === 'ne'
+                ? `डाटा अद्यावधिक छैन (अन्तिम: ${selectedMarket.latestDate})`
+                : `data is not up to date (last updated: ${selectedMarket.latestDate})`}
             </p>
           )}
         </div>
@@ -305,6 +339,7 @@ export default async function HomePage({
                   : 'bg-zinc-800 text-zinc-400'
               }`}
             >
+              {m.isStale && <span className="text-amber-400 mr-0.5">⚠</span>}
               {locale === 'ne' ? m.nameNe : m.nameEn}
             </Link>
           ))}
@@ -453,6 +488,7 @@ export default async function HomePage({
                         : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200'
                     }`}
                   >
+                    {m.isStale && <span className="text-amber-400 mr-0.5">⚠</span>}
                     {locale === 'ne' ? m.nameNe : m.nameEn}
                   </Link>
                 ))}
@@ -502,6 +538,11 @@ export default async function HomePage({
                           {getName(row)}
                         </Link>
                         <span className="ml-1 text-xs text-zinc-600">/{row.unit}</span>
+                        {row.isStale && (
+                          <span className="ml-1.5 text-[10px] text-amber-500" title={row.date ?? undefined}>
+                            ⚠ {row.date}
+                          </span>
+                        )}
                       </td>
                       <td className="hidden sm:table-cell px-4 py-2 text-right font-mono text-zinc-400">
                         {row.minPrice !== null ? row.minPrice.toFixed(0) : '—'}

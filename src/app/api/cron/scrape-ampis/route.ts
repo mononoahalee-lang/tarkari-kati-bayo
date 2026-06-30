@@ -17,15 +17,19 @@ async function run(request: NextRequest) {
   today.setHours(0, 0, 0, 0)
 
   try {
-    const count = await scrapeAmpis()
+    const result = await scrapeAmpis()
+    const zeroRowMarkets = result.markets.filter((m) => m.rows === 0).map((m) => m.nameEn)
+    const message = zeroRowMarkets.length > 0
+      ? `0 rows for: ${zeroRowMarkets.join(', ')}`
+      : null
     await prisma.scrapeLog.create({
-      data: { source: 'ampis', targetDate: today, itemsCount: count, success: true },
+      data: { source: 'ampis', targetDate: today, itemsCount: result.total, success: true, message },
     })
     for (const lang of ['en', 'ne', 'ja']) {
       revalidatePath(`/${lang}`)
       revalidatePath(`/${lang}/chart`)
     }
-    return NextResponse.json({ success: true, ampis: count, durationMs: Date.now() - startAt })
+    return NextResponse.json({ success: true, ampis: result.total, markets: result.markets, durationMs: Date.now() - startAt })
   } catch (err) {
     console.error('[cron/scrape-ampis]', err)
     await prisma.scrapeLog.create({

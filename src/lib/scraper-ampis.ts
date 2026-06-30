@@ -78,7 +78,14 @@ type ParsedRow = {
   max: number
 }
 
-export async function scrapeAmpis(): Promise<number> {
+export type AmpisMarketResult = { nameEn: string; rows: number }
+
+export type AmpisScrapeResult = {
+  total: number
+  markets: AmpisMarketResult[]
+}
+
+export async function scrapeAmpis(): Promise<AmpisScrapeResult> {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
@@ -96,16 +103,18 @@ export async function scrapeAmpis(): Promise<number> {
   // 2. Fetch all market HTML in parallel (network I/O, no DB involved)
   const htmls = await Promise.all(AMPIS_MARKETS.map((m) => fetchMarketHtml(m.id)))
 
-  // 3. Parse and collect all rows (no DB at this stage)
+  // 3. Parse and collect all rows (no DB at this stage), tracking per-market counts
   const allRows: ParsedRow[] = []
+  const marketResults: AmpisMarketResult[] = []
   for (let i = 0; i < AMPIS_MARKETS.length; i++) {
     const parsed = parseRows(htmls[i])
+    marketResults.push({ nameEn: AMPIS_MARKETS[i].nameEn, rows: parsed.length })
     for (const row of parsed) {
       allRows.push({ dbMarketId: dbMarkets[i].id, ...row })
     }
   }
 
-  if (allRows.length === 0) return 0
+  if (allRows.length === 0) return { total: 0, markets: marketResults }
 
   // 4. Batch-lookup all vegetables by both normalised and space-prefixed names
   //    (space-prefixed lookup catches legacy DB records created before normaliseNe was applied)
@@ -150,7 +159,7 @@ export async function scrapeAmpis(): Promise<number> {
     return [{ vegId, marketId: row.dbMarketId, min: row.min, max: row.max, avg }]
   })
 
-  if (records.length === 0) return 0
+  if (records.length === 0) return { total: 0, markets: marketResults }
 
   const values = records
     .map(
@@ -171,5 +180,5 @@ export async function scrapeAmpis(): Promise<number> {
     ...params
   )
 
-  return records.length
+  return { total: records.length, markets: marketResults }
 }

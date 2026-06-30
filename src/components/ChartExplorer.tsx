@@ -55,6 +55,7 @@ type MarketItem = {
   id: string
   nameEn: string
   nameNe: string
+  isStale: boolean
 }
 
 type Period = '1W' | '1M' | '3M' | '1Y'
@@ -116,7 +117,7 @@ export default function ChartExplorer({ vegetables, markets, locale }: Props) {
   const [loading, setLoading] = useState(false)
   const [marketPrices, setMarketPrices] = useState<Array<{
     marketId: string; marketNameEn: string; marketNameNe: string
-    district: string; minPrice: number; maxPrice: number; avgPrice: number; date: string
+    district: string; minPrice: number; maxPrice: number; avgPrice: number; date: string; isStale: boolean
   }>>([])
   const [loadingMarkets, setLoadingMarkets] = useState(false)
   const [mobileListOpen, setMobileListOpen] = useState(false)
@@ -383,12 +384,17 @@ export default function ChartExplorer({ vegetables, markets, locale }: Props) {
                   <option value="all">{ui.allMarkets}</option>
                   {markets.map((m) => (
                     <option key={m.id} value={m.id}>
-                      {locale === 'ne' ? m.nameNe : m.nameEn}
+                      {m.isStale ? '⚠ ' : ''}{locale === 'ne' ? m.nameNe : m.nameEn}
                     </option>
                   ))}
                 </select>
               </div>
             </div>
+            {selectedMarketId !== 'all' && markets.find((m) => m.id === selectedMarketId)?.isStale && (
+              <p className="text-xs text-amber-500">
+                ⚠ {locale === 'ja' ? 'このデータは最新ではありません' : locale === 'ne' ? 'डाटा अद्यावधिक छैन' : 'This data is not up to date'}
+              </p>
+            )}
 
             {/* Chart */}
             <div className="h-[280px] lg:h-[380px] rounded-lg border border-zinc-700 bg-zinc-900 p-3">
@@ -465,7 +471,9 @@ export default function ChartExplorer({ vegetables, markets, locale }: Props) {
               <div className="px-3 py-2 border-b border-zinc-700 flex items-center justify-between">
                 <h3 className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">{ui.marketCompare}</h3>
                 {marketPrices.length > 0 && (
-                  <span className="text-xs text-zinc-500">{marketPrices[0]?.date}</span>
+                  <span className={`text-xs ${marketPrices[0]?.isStale ? 'text-amber-500' : 'text-zinc-500'}`}>
+                    {marketPrices[0]?.isStale && '⚠ '}{marketPrices[0]?.date}
+                  </span>
                 )}
               </div>
               {loadingMarkets ? (
