@@ -8,6 +8,9 @@ export default async function AdminPage({ params }: { params: Promise<{ lang: st
   const { lang } = await params
   if (!hasLocale(lang)) notFound()
 
+  const today = new Date().toISOString().split('T')[0]
+  const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0]
+
   // Last 30 scrape logs
   const logs = await prisma.scrapeLog.findMany({
     orderBy: { runAt: 'desc' },
@@ -24,8 +27,18 @@ export default async function AdminPage({ params }: { params: Promise<{ lang: st
     ORDER BY MAX(p.date) DESC
   ` as Array<{ nameEn: string; latest: string; recent_veg: number }>
 
-  const today = new Date().toISOString().split('T')[0]
-  const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0]
+  // Stale vegetables: have data in last 365 days but not today/yesterday
+  const staleVegetables = await prisma.$queryRaw`
+    SELECT v."nameEn", v."nameNe", MAX(p.date)::text as latest_date,
+      DATE_PART('day', NOW() - MAX(p.date))::int as days_old
+    FROM "Vegetable" v
+    JOIN "PriceRecord" p ON p."vegetableId" = v.id
+    GROUP BY v.id, v."nameEn", v."nameNe"
+    HAVING MAX(p.date)::text NOT IN (${today}, ${yesterday})
+      AND MAX(p.date) >= NOW() - INTERVAL '365 days'
+    ORDER BY MAX(p.date) DESC
+    LIMIT 50
+  ` as Array<{ nameEn: string; nameNe: string; latest_date: string; days_old: number }>
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 p-6 max-w-4xl mx-auto">
@@ -64,6 +77,48 @@ export default async function AdminPage({ params }: { params: Promise<{ lang: st
             </tbody>
           </table>
         </div>
+      </section>
+
+      {/* Stale Vegetables */}
+      <section className="mb-8">
+        <h2 className="text-lg font-semibold text-zinc-300 mb-1">Stale Vegetables ({staleVegetables.length})</h2>
+        <p className="text-xs text-zinc-500 mb-3">
+          Has data in last 365 days, but not today or yesterday. Many are due to AMPIS renaming vegetables (June 2026).
+        </p>
+        {staleVegetables.length === 0 ? (
+          <p className="text-green-400 text-sm">All vegetables have fresh data.</p>
+        ) : (
+          <div className="rounded-lg border border-zinc-700 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-zinc-800 text-zinc-400 text-xs uppercase tracking-wider">
+                  <th className="px-4 py-2 text-left">Vegetable</th>
+                  <th className="px-4 py-2 text-left">नेपाली</th>
+                  <th className="px-4 py-2 text-right">Last Data</th>
+                  <th className="px-4 py-2 text-right">Days Old</th>
+                </tr>
+              </thead>
+              <tbody>
+                {staleVegetables.map((v) => (
+                  <tr key={v.nameEn} className="border-t border-zinc-800">
+                    <td className="px-4 py-2 font-medium text-zinc-200">{v.nameEn}</td>
+                    <td className="px-4 py-2 text-zinc-400">{v.nameNe}</td>
+                    <td className="px-4 py-2 text-right font-mono text-amber-400">{v.latest_date}</td>
+                    <td className="px-4 py-2 text-right font-mono">
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                        v.days_old <= 7 ? 'bg-yellow-900 text-yellow-300'
+                        : v.days_old <= 30 ? 'bg-orange-900 text-orange-300'
+                        : 'bg-red-900 text-red-300'
+                      }`}>
+                        {v.days_old}d
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
 
       {/* Scrape Logs */}

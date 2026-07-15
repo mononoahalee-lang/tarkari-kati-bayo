@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import Link from 'next/link'
 import MarketCompare from '@/components/MarketCompare'
 import PriceChartWrapper from '@/components/PriceChartWrapper'
+import { toDateStr, isStaleDateStr } from '@/lib/freshness'
 
 export const dynamic = 'force-dynamic'
 
@@ -70,6 +71,14 @@ async function getVegetableData(id: string, days: number) {
   const allMin = records.map((r) => r.minPrice)
   const allMax = records.map((r) => r.maxPrice)
 
+  // Absolute latest date across all records (regardless of cross-market filter)
+  const absoluteLatestRecord = await prisma.priceRecord.findFirst({
+    where: { vegetableId: id },
+    orderBy: { date: 'desc' },
+    select: { date: true },
+  })
+  const latestDate = absoluteLatestRecord ? toDateStr(absoluteLatestRecord.date) : null
+
   const stats =
     allAvg.length > 0
       ? {
@@ -81,7 +90,7 @@ async function getVegetableData(id: string, days: number) {
         }
       : null
 
-  return { vegetable, candlesticks, stats }
+  return { vegetable, candlesticks, stats, latestDate }
 }
 
 async function getMarketCompare(id: string) {
@@ -175,11 +184,12 @@ export default async function VegetablePage({
 
   if (!vegData) notFound()
 
-  const { vegetable, candlesticks, stats } = vegData
+  const { vegetable, candlesticks, stats, latestDate } = vegData
   const name = locale === 'ne' ? vegetable.nameNe : locale === 'ja' ? vegetable.nameJa : vegetable.nameEn
+  const isStale = isStaleDateStr(latestDate)
 
   const changePct =
-    stats && stats.first > 0 ? (((stats.latest - stats.first) / stats.first) * 100).toFixed(2) : null
+    stats && stats.first > 0 && !isStale ? (((stats.latest - stats.first) / stats.first) * 100).toFixed(2) : null
 
   const currentMonth = new Date().getMonth() + 1
   const currentSeasonInfo = seasonData.find((m) => m.month === currentMonth)
@@ -211,9 +221,14 @@ export default async function VegetablePage({
         </div>
         {stats && (
           <div className="text-right">
-            <p className="text-2xl font-bold font-mono text-zinc-100">
+            <p className={`text-2xl font-bold font-mono ${isStale ? 'text-zinc-400' : 'text-zinc-100'}`}>
               {stats.latest.toFixed(2)}
             </p>
+            {isStale && latestDate && (
+              <p className="text-xs text-amber-500 mt-0.5">
+                ⚠ {locale === 'ja' ? 'データ最終更新' : locale === 'ne' ? 'अन्तिम डेटा' : 'Last data'}: {latestDate}
+              </p>
+            )}
             {changePct && (
               <p className={`text-sm font-medium font-mono ${parseFloat(changePct) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                 {parseFloat(changePct) >= 0 ? '+' : ''}{changePct}%
