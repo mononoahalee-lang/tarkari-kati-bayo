@@ -47,10 +47,10 @@ async function getVegetablesWithPrice() {
     .map((v) => {
       const latest = latestMap.get(v.id) ?? null
       const isStale = isStaleDateStr(latest?.date ?? null)
-      const avg = !isStale ? latest?.avgPrice ?? null : null
+      const avg = latest?.avgPrice ?? null  // show last known price even if stale; UI marks it as outdated
       const prev = prevMap.get(v.id) ?? null
       const range = rangeMap.get(v.id)
-      const changePct = avg !== null && prev !== null && prev > 0 ? ((avg - prev) / prev) * 100 : null
+      const changePct = !isStale && avg !== null && prev !== null && prev > 0 ? ((avg - prev) / prev) * 100 : null
       return {
         ...v,
         avgPrice: avg,

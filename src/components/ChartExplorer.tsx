@@ -16,6 +16,8 @@ type VegItem = {
   changePct: number | null
   min52w: number | null
   max52w: number | null
+  isStale?: boolean
+  lastDate?: string | null
 }
 
 function PriceGauge({
@@ -247,6 +249,9 @@ export default function ChartExplorer({ vegetables, markets, locale }: Props) {
           const pct = mktData?.changePct ?? v.changePct
           const min52w = mktData?.min52w ?? v.min52w
           const max52w = mktData?.max52w ?? v.max52w
+          // In all-markets mode, use the vegetable's own staleness flag.
+          // In market-specific mode the marketPriceMap drives the list, so treat it as fresh.
+          const rowIsStale = selectedMarketId === 'all' ? (v.isStale ?? false) : false
           return (
             <button
               key={v.id}
@@ -263,12 +268,17 @@ export default function ChartExplorer({ vegetables, markets, locale }: Props) {
                 </span>
                 <div className="flex flex-col items-end ml-2 shrink-0">
                   {displayAvg !== null && displayAvg !== undefined && (
-                    <span className="font-mono text-sm font-semibold text-white">{displayAvg.toFixed(0)}</span>
+                    <span className={`font-mono text-sm font-semibold ${rowIsStale ? 'text-zinc-500' : 'text-white'}`}>
+                      {displayAvg.toFixed(0)}
+                    </span>
                   )}
-                  {pct !== null && pct !== undefined && (
+                  {!rowIsStale && pct !== null && pct !== undefined && (
                     <span className={`font-mono text-xs font-medium ${pct >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                       {pct >= 0 ? '+' : ''}{pct.toFixed(1)}%
                     </span>
+                  )}
+                  {rowIsStale && v.lastDate && (
+                    <span className="text-amber-600 text-[10px]">⚠ {v.lastDate}</span>
                   )}
                 </div>
               </div>
