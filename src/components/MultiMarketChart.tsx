@@ -43,23 +43,28 @@ function hexToRgba(hex: string, alpha: number) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`
 }
 
+const STALE_DAYS = 14
+
 const UI: Record<Locale, {
-  noData: string; market: string; latest: string; low: string; high: string; lastUpdate: string; clickHint: string
+  noData: string; market: string; latest: string; low: string; high: string; lastUpdate: string; clickHint: string; stale: string; staleNote: string
   periods: Record<Period, string>
 }> = {
   ne: {
     noData: 'डेटा उपलब्ध छैन', market: 'बजार', latest: 'हालको मूल्य', low: 'न्यूनतम', high: 'अधिकतम', lastUpdate: 'अन्तिम अद्यावधिक',
     clickHint: 'कुनै बजारमा क्लिक गरेर त्यसको लाइन हाइलाइट गर्नुहोस्',
+    stale: 'डेटा उपलब्ध छैन', staleNote: 'यस बजारको डेटा हाल उपलब्ध छैन',
     periods: { '1M': '१ म', '3M': '३ म', '1Y': '१ व', ALL: 'सबै' },
   },
   en: {
     noData: 'No data available', market: 'Market', latest: 'Latest', low: 'Low', high: 'High', lastUpdate: 'Last update',
     clickHint: 'Click a market to highlight its line',
+    stale: 'Unavailable', staleNote: 'Data for this market is currently unavailable',
     periods: { '1M': '1M', '3M': '3M', '1Y': '1Y', ALL: 'All' },
   },
   ja: {
     noData: 'データがありません', market: '市場', latest: '最新価格', low: '最安値', high: '最高値', lastUpdate: '最終更新',
     clickHint: '市場名をクリックすると、その線をハイライト表示します',
+    stale: 'データ停止中', staleNote: 'この市場のデータは現在入手できていません',
     periods: { '1M': '1ヶ月', '3M': '3ヶ月', '1Y': '1年', ALL: '全期間' },
   },
 }
@@ -174,16 +179,29 @@ export default function MultiMarketChart({ data, locale }: Props) {
     return <p className="text-sm text-zinc-500 py-8 text-center">{ui.noData}</p>
   }
 
+  const staleThreshold = new Date(Date.now() - STALE_DAYS * 86400000).toISOString().split('T')[0]
+
+  // Last known date per market across ALL historical data (data is sorted asc)
+  const lastKnownFor = new Map<string, string>()
+  for (const d of data) {
+    const cur = lastKnownFor.get(d.marketId)
+    if (!cur || d.date > cur) lastKnownFor.set(d.marketId, d.date)
+  }
+
   const filtered = filterByPeriod(data, period)
-  const rows = marketIds.map((marketId) => {
+  const allRows = marketIds.map((marketId) => {
     const points = filtered.filter((d) => d.marketId === marketId).sort((a, b) => a.date.localeCompare(b.date))
     const meta = marketMeta.get(marketId)!
     const latest = points[points.length - 1] ?? null
     const low = points.length > 0 ? Math.min(...points.map((p) => p.minPrice)) : null
     const high = points.length > 0 ? Math.max(...points.map((p) => p.maxPrice)) : null
-    return { marketId, meta, latest, low, high }
-  }).filter((r) => r.latest !== null)
-    .sort((a, b) => (a.latest!.avgPrice) - (b.latest!.avgPrice))
+    const lastKnown = lastKnownFor.get(marketId) ?? null
+    const isStale = !lastKnown || lastKnown < staleThreshold
+    return { marketId, meta, latest, low, high, lastKnown, isStale }
+  })
+
+  const rows = allRows.filter((r) => r.latest !== null).sort((a, b) => a.latest!.avgPrice - b.latest!.avgPrice)
+  const staleRows = allRows.filter((r) => r.latest === null)
 
   return (
     <div className="rounded-lg border border-zinc-800 bg-zinc-900 overflow-hidden">
@@ -230,14 +248,34 @@ export default function MultiMarketChart({ data, locale }: Props) {
                       style={{ backgroundColor: colorFor(r.marketId) }}
                     />
                     {getMarketName(r.meta, locale)}
+                    {r.isStale && (
+                      <span title={ui.staleNote} className="ml-2 rounded px-1.5 py-0.5 text-[10px] font-medium bg-yellow-900/40 text-yellow-500 border border-yellow-700/40">
+                        {ui.stale}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-2 text-right font-mono text-zinc-100">{r.latest!.avgPrice.toFixed(2)}</td>
                   <td className="px-4 py-2 text-right font-mono text-zinc-500">{r.low}</td>
                   <td className="px-4 py-2 text-right font-mono text-zinc-500">{r.high}</td>
-                  <td className="px-4 py-2 text-right font-mono text-zinc-500">{r.latest!.date}</td>
+                  <td className={`px-4 py-2 text-right font-mono ${r.isStale ? 'text-yellow-600' : 'text-zinc-500'}`}>{r.latest!.date}</td>
                 </tr>
               )
             })}
+            {staleRows.map((r) => (
+              <tr key={r.marketId} className="border-t border-zinc-800/60">
+                <td className="px-4 py-2 text-zinc-500">
+                  <span className="inline-block w-2.5 h-2.5 rounded-full mr-2 bg-zinc-700" />
+                  {getMarketName(r.meta, locale)}
+                  <span title={ui.staleNote} className="ml-2 rounded px-1.5 py-0.5 text-[10px] font-medium bg-yellow-900/40 text-yellow-500 border border-yellow-700/40">
+                    {ui.stale}
+                  </span>
+                </td>
+                <td className="px-4 py-2 text-right text-zinc-600 text-xs">—</td>
+                <td className="px-4 py-2 text-right text-zinc-600 text-xs">—</td>
+                <td className="px-4 py-2 text-right text-zinc-600 text-xs">—</td>
+                <td className="px-4 py-2 text-right font-mono text-yellow-700 text-xs">{r.lastKnown ?? '—'}</td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
