@@ -81,7 +81,16 @@ const UI = {
     index: 'Index',
     vegCount: 'items',
     allMarkets: 'All Markets',
-    note: 'Index 100 = cross-market avg (last 7 days)',
+    note: '| = avg (100)',
+    howLabel: 'How is this calculated?',
+    howBody: [
+      'Scope: vegetables reported by 2+ markets in the last 7 days.',
+      'Step 1 — For each vegetable, compute the cross-market average price.',
+      'Step 2 — Divide each market\'s price by that average to get a ratio (1.0 = average).',
+      'Step 3 — Average those ratios across all qualifying vegetables × 100 = price index.',
+      'Example: index 115 means prices at this market are on average 15% higher than the multi-market average.',
+      'Normalising per vegetable removes bias from differences in product mix between markets.',
+    ],
   },
   ne: {
     title: 'बजार नक्सा',
@@ -94,7 +103,16 @@ const UI = {
     index: 'सूचकांक',
     vegCount: 'वस्तुहरू',
     allMarkets: 'सबै बजार',
-    note: 'सूचकांक १०० = बजार औसत (अन्तिम ७ दिन)',
+    note: '| = औसत (१००)',
+    howLabel: 'सूचकांक कसरी गणना गरिन्छ?',
+    howBody: [
+      'दायरा: अन्तिम ७ दिनमा २ वा बढी बजारले रिपोर्ट गरेका तरकारीहरू मात्र समावेश।',
+      'चरण १ — प्रत्येक तरकारीको सबै बजारको औसत मूल्य निकाल्नुहोस्।',
+      'चरण २ — प्रत्येक बजारको मूल्यलाई सो औसतले भाग गर्नुहोस् (अनुपात १.० = औसत)।',
+      'चरण ३ — ती अनुपातहरूको औसत × १०० = मूल्य सूचकांक।',
+      'उदाहरण: सूचकांक ११५ भनेको यस बजारको मूल्य औसतभन्दा १५% बढी छ।',
+      'प्रत्येक तरकारीमा सामान्यीकरण गर्दा बजारबीचको उत्पादन मिश्रण भिन्नताको असर हट्छ।',
+    ],
   },
   ja: {
     title: '市場マップ',
@@ -107,7 +125,16 @@ const UI = {
     index: '指数',
     vegCount: '品目',
     allMarkets: '全市場',
-    note: '指数100 = 市場平均（直近7日）',
+    note: '| = 平均 (100)',
+    howLabel: '指数の算出方法',
+    howBody: [
+      '対象：直近7日間で2市場以上が報告している野菜のみ。',
+      'ステップ1 — 野菜ごとに全市場の平均価格を算出。',
+      'ステップ2 — 各市場の価格をその全市場平均で割り、比率を計算（1.0 = 平均）。',
+      'ステップ3 — すべての対象野菜の比率を平均したもの × 100 = 価格指数。',
+      '例：指数115 = そのマーケットでは同じ野菜が他市場の平均より15%高い。',
+      '野菜ごとに正規化することで、各市場の品揃えの違いによるバイアスを除いています。',
+    ],
   },
 } as const
 
@@ -369,10 +396,20 @@ export default function NepalMarketMap({ markets, selectedMarketId, locale }: Pr
               })}
             </div>
 
-            {/* Scale note */}
-            <p className="text-[10px] text-zinc-600 mt-3 leading-relaxed">
-              | = {ui.avg} (100). {ui.note}
-            </p>
+            {/* Scale note + methodology disclosure */}
+            <p className="text-[10px] text-zinc-600 mt-3">{ui.note}</p>
+            <details className="mt-2 group">
+              <summary className="text-[10px] text-zinc-500 cursor-pointer select-none hover:text-zinc-300 transition-colors list-none flex items-center gap-1">
+                <span className="group-open:hidden">▶</span>
+                <span className="hidden group-open:inline">▼</span>
+                {ui.howLabel}
+              </summary>
+              <ul className="mt-2 space-y-1 border-l border-zinc-700 pl-3">
+                {ui.howBody.map((line, i) => (
+                  <li key={i} className="text-[10px] text-zinc-500 leading-relaxed">{line}</li>
+                ))}
+              </ul>
+            </details>
           </div>
         )}
       </div>
