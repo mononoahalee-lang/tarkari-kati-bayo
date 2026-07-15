@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import Link from 'next/link'
 import PriceIndexChart, { type IndexPoint } from '@/components/PriceIndexChart'
+import NepalMarketMap, { type MarketMapData } from '@/components/NepalMarketMap'
 import { toDateStr, isStaleDateStr } from '@/lib/freshness'
 
 export const revalidate = 43200 // cache for 12h; cron invalidates on-demand after scraping
@@ -145,6 +146,59 @@ async function getIndexData(): Promise<IndexPoint[]> {
   return rows.map((r) => ({ date: r.date.split('T')[0], avgPrice: Number(r.avgPrice) }))
 }
 
+async function getMarketPriceIndices(): Promise<Map<string, { priceIndex: number; avgPrice: number; vegCount: number }>> {
+  const since = new Date(Date.now() - 7 * 86400000)
+
+  // Average price per (market, vegetable) over the last 7 days
+  const rows = await prisma.$queryRaw<Array<{
+    marketId: string; vegetableId: string; avgPrice: number
+  }>>`
+    SELECT "marketId", "vegetableId", AVG("avgPrice")::float AS "avgPrice"
+    FROM "PriceRecord"
+    WHERE date >= ${since}
+    GROUP BY "marketId", "vegetableId"
+  `
+
+  if (rows.length === 0) return new Map()
+
+  // Cross-market average per vegetable (only for vegetables present in ≥2 markets)
+  const vegBuckets = new Map<string, { sum: number; count: number }>()
+  for (const r of rows) {
+    const e = vegBuckets.get(r.vegetableId) ?? { sum: 0, count: 0 }
+    e.sum += Number(r.avgPrice)
+    e.count++
+    vegBuckets.set(r.vegetableId, e)
+  }
+
+  // Price index per market = average of (market_price / cross_market_avg) for each
+  // vegetable tracked at ≥2 markets, scaled to 100
+  const marketBuckets = new Map<string, { ratioSum: number; ratioCount: number; priceSum: number; vegCount: number }>()
+  for (const r of rows) {
+    const bucket = vegBuckets.get(r.vegetableId)!
+    if (bucket.count < 2) continue  // Only compare when ≥2 markets report this vegetable
+    const overall = bucket.sum / bucket.count
+    const ratio = Number(r.avgPrice) / overall
+
+    const entry = marketBuckets.get(r.marketId) ?? { ratioSum: 0, ratioCount: 0, priceSum: 0, vegCount: 0 }
+    entry.ratioSum += ratio
+    entry.ratioCount++
+    entry.priceSum += Number(r.avgPrice)
+    entry.vegCount++
+    marketBuckets.set(r.marketId, entry)
+  }
+
+  const result = new Map<string, { priceIndex: number; avgPrice: number; vegCount: number }>()
+  for (const [marketId, e] of marketBuckets) {
+    if (e.ratioCount === 0) continue
+    result.set(marketId, {
+      priceIndex: (e.ratioSum / e.ratioCount) * 100,
+      avgPrice: e.priceSum / e.vegCount,
+      vegCount: e.vegCount,
+    })
+  }
+  return result
+}
+
 async function getMarketSpread(): Promise<SpreadRow[]> {
   try {
     const since = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000)
@@ -228,13 +282,29 @@ export default async function HomePage({
   const sp = (await searchParams) ?? {}
   const selectedMarketId = sp.marketId
 
-  const [dict, rows, markets, spread, indexData] = await Promise.all([
+  const [dict, rows, markets, spread, indexData, marketIndices] = await Promise.all([
     getDictionary(locale),
     getPriceRows(selectedMarketId),
     getMarkets(),
     getMarketSpread(),
     getIndexData(),
+    getMarketPriceIndices(),
   ])
+
+  const marketMapData: MarketMapData[] = markets.map(m => {
+    const idx = marketIndices.get(m.id)
+    return {
+      id: m.id,
+      nameEn: m.nameEn,
+      nameNe: m.nameNe,
+      source: m.source,
+      isStale: m.isStale,
+      latestDate: m.latestDate,
+      priceIndex: idx?.priceIndex ?? null,
+      avgPrice: idx?.avgPrice ?? null,
+      vegCount: idx?.vegCount ?? 0,
+    }
+  })
 
   const getName = (row: VegRow) =>
     locale === 'ne' ? row.nameNe : locale === 'ja' ? row.nameJa : row.nameEn
@@ -349,6 +419,15 @@ export default async function HomePage({
       {/* Price Index Chart */}
       {indexData.length > 0 && (
         <PriceIndexChart data={indexData} locale={locale} />
+      )}
+
+      {/* Nepal Market Map — location + price index per market */}
+      {marketMapData.length > 0 && (
+        <NepalMarketMap
+          markets={marketMapData}
+          selectedMarketId={selectedMarketId}
+          locale={locale}
+        />
       )}
 
       {withData.length === 0 ? (
