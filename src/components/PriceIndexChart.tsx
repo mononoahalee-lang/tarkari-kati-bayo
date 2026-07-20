@@ -105,10 +105,10 @@ export default function PriceIndexChart({ data, locale }: Props) {
 
   const title =
     locale === 'ne'
-      ? 'नेपाल तरकारी मूल्य सूचकाङ्क'
+      ? 'नेपाल तरकारी औसत थोक मूल्य'
       : locale === 'ja'
-      ? 'ネパール野菜総合価格指数'
-      : 'Nepal Vegetable Price Index'
+      ? 'ネパール野菜平均卸売価格'
+      : 'Nepal Vegetable Avg. Wholesale Price'
 
   const periodLabels: Record<Period, string> =
     locale === 'ne'
@@ -141,10 +141,10 @@ export default function PriceIndexChart({ data, locale }: Props) {
               )}
               <span className="text-xs text-zinc-600 font-mono">
                 {locale === 'ne'
-                  ? `/ सबै बजार`
+                  ? `/ स्थिर टोकरी औसत`
                   : locale === 'ja'
-                  ? '/ 全市場平均'
-                  : '/ all markets avg'}
+                  ? '/ 固定バスケット平均'
+                  : '/ fixed basket avg'}
               </span>
             </div>
           )}

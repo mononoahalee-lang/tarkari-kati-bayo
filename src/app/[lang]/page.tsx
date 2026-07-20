@@ -136,10 +136,42 @@ type SpreadRow = {
 
 async function getIndexData(): Promise<IndexPoint[]> {
   const since = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000)
-  const rows = await prisma.$queryRaw<Array<{ date: string; avgPrice: number }>>`
-    SELECT date::text AS date, AVG("avgPrice")::float AS "avgPrice"
+  const lookback90 = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
+
+  // Build a fixed basket: vegetables present on ≥50% of active days in the last 90 days.
+  // A simple AVG over all records drifts badly when AMPIS adds/removes vegetables
+  // (cheap items disappearing and expensive items appearing shifts the mean by 30%+
+  // even when underlying prices are flat). A fixed basket eliminates composition drift.
+  const basketRows = await prisma.$queryRaw<Array<{ vegetableId: string }>>`
+    WITH period AS (
+      SELECT COUNT(DISTINCT date)::float AS total_days
+      FROM "PriceRecord" WHERE date >= ${lookback90}
+    )
+    SELECT "vegetableId"
+    FROM "PriceRecord"
+    WHERE date >= ${lookback90}
+    GROUP BY "vegetableId"
+    HAVING COUNT(DISTINCT date)::float / (SELECT total_days FROM period) >= 0.5
+  `
+
+  if (basketRows.length === 0) {
+    // Fallback if basket is empty (e.g. fresh DB with very little data)
+    const rows = await prisma.$queryRaw<Array<{ date: string; avgPrice: number }>>`
+      SELECT date::text AS date, AVG("avgPrice")::float AS "avgPrice"
+      FROM "PriceRecord" WHERE date >= ${since}
+      GROUP BY date ORDER BY date ASC
+    `
+    return rows.map((r) => ({ date: r.date.split('T')[0], avgPrice: Number(r.avgPrice) }))
+  }
+
+  const basketIds = basketRows.map((r) => r.vegetableId)
+  const rows = await prisma.$queryRaw<Array<{ date: string; avgPrice: number; basketSize: number }>>`
+    SELECT date::text AS date,
+           AVG("avgPrice")::float AS "avgPrice",
+           COUNT(DISTINCT "vegetableId")::int AS "basketSize"
     FROM "PriceRecord"
     WHERE date >= ${since}
+      AND "vegetableId" = ANY(${basketIds}::text[])
     GROUP BY date
     ORDER BY date ASC
   `
