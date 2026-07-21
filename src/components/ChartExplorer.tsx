@@ -73,7 +73,7 @@ const UI: Record<Locale, {
   search: string; select: string; noData: string; high: string; low: string; avg: string
   loading: string; noPriceHistory: string; allMarkets: string; market: string
   avgPrice: string; allMarketsAvg: string; marketCompare: string; min: string; max: string
-  recentPrices: string; date: string
+  recentPrices: string; date: string; downloadCSV: string
 }> = {
   ne: {
     search: 'तरकारी खोज्नुहोस्...', select: 'तरकारी चुन्नुहोस्', noData: 'डेटा उपलब्ध छैन',
@@ -81,6 +81,7 @@ const UI: Record<Locale, {
     allMarkets: 'सबै बजार', market: 'बजार',
     avgPrice: 'औसत थोक मूल्य', allMarketsAvg: 'सबै बजारको औसत', marketCompare: 'बजारअनुसार मूल्य',
     min: 'न्यून', max: 'उच्च', recentPrices: 'पछिल्लो ३ दिनको मूल्य', date: 'मिति',
+    downloadCSV: 'CSV डाउनलोड',
   },
   en: {
     search: 'Search vegetables...', select: 'Select a vegetable', noData: 'No data',
@@ -88,6 +89,7 @@ const UI: Record<Locale, {
     allMarkets: 'All Markets', market: 'Market',
     avgPrice: 'Avg. Wholesale Price', allMarketsAvg: 'All markets average', marketCompare: 'Price by Market',
     min: 'Min', max: 'Max', recentPrices: 'Recent 3 Days', date: 'Date',
+    downloadCSV: 'Download CSV',
   },
   ja: {
     search: '野菜を検索...', select: '野菜を選択', noData: 'データなし',
@@ -95,6 +97,7 @@ const UI: Record<Locale, {
     allMarkets: '全市場', market: '市場',
     avgPrice: '平均卸売価格', allMarketsAvg: '全市場の平均', marketCompare: '市場別価格',
     min: '最低値', max: '最高値', recentPrices: '直近3日間の価格', date: '日付',
+    downloadCSV: 'CSV ダウンロード',
   },
 }
 
@@ -129,6 +132,9 @@ export default function ChartExplorer({ vegetables, markets, locale, initialMark
   const [mobileListOpen, setMobileListOpen] = useState(false)
   const [marketVegIds, setMarketVegIds] = useState<Set<string> | null>(null)
   const [marketPriceMap, setMarketPriceMap] = useState<Record<string, { avgPrice: number; changePct: number | null; min52w: number | null; max52w: number | null }> | null>(null)
+  const [showCsvPanel, setShowCsvPanel] = useState(false)
+  const [csvFrom, setCsvFrom] = useState('')
+  const [csvTo, setCsvTo] = useState('')
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase()
@@ -216,6 +222,41 @@ export default function ChartExplorer({ vegetables, markets, locale, initialMark
       avg: avgs.reduce((a, b) => a + b, 0) / avgs.length,
     }
   }, [candlesticks, period])
+
+  const openCsvPanel = useCallback(() => {
+    if (candlesticks.length === 0) return
+    const last = candlesticks[candlesticks.length - 1].time as string
+    const first = candlesticks[0].time as string
+    setCsvTo(last)
+    // default: same window as current period
+    const cutoff = new Date(last + 'T00:00:00Z')
+    cutoff.setDate(cutoff.getDate() - PERIOD_DAYS[period])
+    const fromStr = cutoff.toISOString().split('T')[0]
+    setCsvFrom(fromStr >= first ? fromStr : first)
+    setShowCsvPanel(true)
+  }, [candlesticks, period])
+
+  const downloadCSV = useCallback(() => {
+    if (!selected || candlesticks.length === 0) return
+    const rows = candlesticks.filter(
+      (c) => (c.time as string) >= csvFrom && (c.time as string) <= csvTo
+    )
+    if (rows.length === 0) return
+    const vegName = selected.nameEn.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_')
+    const marketName = selectedMarketId === 'all'
+      ? 'AllMarkets'
+      : (markets.find((m) => m.id === selectedMarketId)?.nameEn ?? 'AllMarkets').replace(/\s+/g, '_')
+    const header = `date,min_NPR_per_${selected.unit},avg_NPR_per_${selected.unit},max_NPR_per_${selected.unit}\n`
+    const body = rows.map((c) => `${c.time},${c.low.toFixed(0)},${c.close.toFixed(2)},${c.high.toFixed(0)}`).join('\n')
+    const blob = new Blob([header + body], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `tarkari_${vegName}_${marketName}_${csvFrom}_${csvTo}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+    setShowCsvPanel(false)
+  }, [selected, candlesticks, csvFrom, csvTo, selectedMarketId, markets])
 
   // When a specific market is selected, show that market's price instead of all-markets average
   const selectedMarketPrice = selectedMarketId !== 'all'
@@ -372,7 +413,7 @@ export default function ChartExplorer({ vegetables, markets, locale, initialMark
               ) : null
             })()}
 
-            {/* Controls: period + market */}
+            {/* Controls: period + market + CSV */}
             <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
               <div className="flex gap-1">
                 {(Object.keys(PERIOD_DAYS) as Period[]).map((p) => (
@@ -389,7 +430,7 @@ export default function ChartExplorer({ vegetables, markets, locale, initialMark
                   </button>
                 ))}
               </div>
-              <div className="ml-auto">
+              <div className="ml-auto flex items-center gap-2">
                 <select
                   value={selectedMarketId}
                   onChange={(e) => setSelectedMarketId(e.target.value)}
@@ -402,8 +443,69 @@ export default function ChartExplorer({ vegetables, markets, locale, initialMark
                     </option>
                   ))}
                 </select>
+                <button
+                  onClick={openCsvPanel}
+                  disabled={candlesticks.length === 0}
+                  title={ui.downloadCSV}
+                  className="rounded-md bg-zinc-800 border border-zinc-600 px-2 sm:px-3 py-1.5 text-xs sm:text-sm text-zinc-300 hover:bg-zinc-700 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+                >
+                  ↓ CSV
+                </button>
               </div>
             </div>
+
+            {/* CSV export panel */}
+            {showCsvPanel && (
+              <div className="shrink-0 rounded-lg border border-zinc-600 bg-zinc-800 px-4 py-3 flex flex-wrap items-end gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] text-zinc-400 uppercase tracking-wider">
+                    {locale === 'ja' ? '開始日' : locale === 'ne' ? 'सुरु मिति' : 'From'}
+                  </label>
+                  <input
+                    type="date"
+                    value={csvFrom}
+                    min={candlesticks[0]?.time as string}
+                    max={csvTo}
+                    onChange={(e) => setCsvFrom(e.target.value)}
+                    className="rounded bg-zinc-900 border border-zinc-600 px-2 py-1 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-green-500"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] text-zinc-400 uppercase tracking-wider">
+                    {locale === 'ja' ? '終了日' : locale === 'ne' ? 'अन्त्य मिति' : 'To'}
+                  </label>
+                  <input
+                    type="date"
+                    value={csvTo}
+                    min={csvFrom}
+                    max={candlesticks[candlesticks.length - 1]?.time as string}
+                    onChange={(e) => setCsvTo(e.target.value)}
+                    className="rounded bg-zinc-900 border border-zinc-600 px-2 py-1 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-green-500"
+                  />
+                </div>
+                <div className="flex items-center gap-2 text-xs text-zinc-500 self-end pb-1">
+                  <span>
+                    {candlesticks.filter(c => (c.time as string) >= csvFrom && (c.time as string) <= csvTo).length}
+                    {locale === 'ja' ? '日分' : locale === 'ne' ? ' दिन' : ' days'}
+                  </span>
+                </div>
+                <div className="flex gap-2 self-end">
+                  <button
+                    onClick={downloadCSV}
+                    disabled={!csvFrom || !csvTo || csvFrom > csvTo}
+                    className="rounded-md bg-green-700 hover:bg-green-600 disabled:opacity-40 disabled:cursor-not-allowed px-4 py-1.5 text-sm font-semibold text-white transition-colors"
+                  >
+                    ↓ {locale === 'ja' ? 'ダウンロード' : locale === 'ne' ? 'डाउनलोड' : 'Download'}
+                  </button>
+                  <button
+                    onClick={() => setShowCsvPanel(false)}
+                    className="rounded-md bg-zinc-700 hover:bg-zinc-600 px-3 py-1.5 text-sm text-zinc-300 transition-colors"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            )}
             {selectedMarketId !== 'all' && markets.find((m) => m.id === selectedMarketId)?.isStale && (
               <p className="text-xs text-amber-500">
                 ⚠ {locale === 'ja' ? 'このデータは最新ではありません' : locale === 'ne' ? 'डाटा अद्यावधिक छैन' : 'This data is not up to date'}
