@@ -468,6 +468,35 @@ export default async function HomePage({
         </div>
       ) : (
         <>
+          {/* Market filter for movers — compact chip row */}
+          <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-2 flex flex-wrap items-center gap-2">
+            <span className="text-[11px] text-zinc-500 font-medium shrink-0">
+              {locale === 'ne' ? 'बजार:' : locale === 'ja' ? '市場:' : 'Market:'}
+            </span>
+            <Link
+              href={`/${locale}`}
+              className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-colors ${
+                !selectedMarketId ? 'bg-zinc-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              {locale === 'ne' ? 'सबै' : locale === 'ja' ? '全市場' : 'All'}
+            </Link>
+            {markets.map((m) => (
+              <Link
+                key={m.id}
+                href={`/${locale}?marketId=${m.id}`}
+                className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-colors ${
+                  selectedMarketId === m.id
+                    ? 'bg-green-700 text-white'
+                    : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                {m.isStale && <span className="text-amber-400 mr-0.5">⚠</span>}
+                {locale === 'ne' ? m.nameNe : m.nameEn}
+              </Link>
+            ))}
+          </div>
+
           {/* Top Movers */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {/* Gainers */}

@@ -106,13 +106,17 @@ interface Props {
   vegetables: VegItem[]
   markets: MarketItem[]
   locale: Locale
+  initialMarketId?: string
 }
 
-export default function ChartExplorer({ vegetables, markets, locale }: Props) {
+export default function ChartExplorer({ vegetables, markets, locale, initialMarketId }: Props) {
   const ui = UI[locale]
   const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(vegetables[0]?.id ?? null)
-  const [selectedMarketId, setSelectedMarketId] = useState<string>('all')
+  const [selectedMarketId, setSelectedMarketId] = useState<string>(
+    // Validate that the initial market ID exists in the markets list
+    initialMarketId && markets.some(m => m.id === initialMarketId) ? initialMarketId : 'all'
+  )
   const [period, setPeriod] = useState<Period>('1Y')
   const [candlesticks, setCandlesticks] = useState<CandlestickPoint[]>([])
   const [stats, setStats] = useState<{ high: number; low: number; avg: number } | null>(null)

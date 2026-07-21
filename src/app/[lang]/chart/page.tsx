@@ -80,14 +80,26 @@ async function getMarkets() {
   })
 }
 
-export default async function ChartPage({ params }: { params: Promise<{ lang: string }> }) {
+export default async function ChartPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ lang: string }>
+  searchParams?: Promise<{ marketId?: string }>
+}) {
   const { lang } = await params
   if (!hasLocale(lang)) notFound()
 
   const locale = lang as Locale
+  const { marketId } = (await searchParams) ?? {}
   const [vegetables, markets] = await Promise.all([getVegetablesWithPrice(), getMarkets()])
 
   return (
-    <ChartExplorer vegetables={vegetables} markets={markets} locale={locale} />
+    <ChartExplorer
+      vegetables={vegetables}
+      markets={markets}
+      locale={locale}
+      initialMarketId={marketId}
+    />
   )
 }

@@ -82,6 +82,7 @@ const UI = {
     vegCount: 'items',
     allMarkets: 'All Markets',
     note: '| = avg (100)',
+    clickHint: 'Click to open price charts →',
     howLabel: 'How is this calculated?',
     howBody: [
       'Scope: vegetables reported by 2+ markets in the last 7 days.',
@@ -104,6 +105,7 @@ const UI = {
     vegCount: 'वस्तुहरू',
     allMarkets: 'सबै बजार',
     note: '| = औसत (१००)',
+    clickHint: 'मूल्य चार्ट हेर्न क्लिक गर्नुहोस् →',
     howLabel: 'सूचकांक कसरी गणना गरिन्छ?',
     howBody: [
       'दायरा: अन्तिम ७ दिनमा २ वा बढी बजारले रिपोर्ट गरेका तरकारीहरू मात्र समावेश।',
@@ -126,6 +128,7 @@ const UI = {
     vegCount: '品目',
     allMarkets: '全市場',
     note: '| = 平均 (100)',
+    clickHint: 'クリックで価格チャートへ →',
     howLabel: '指数の算出方法',
     howBody: [
       '対象：直近7日間で2市場以上が報告している野菜のみ。',
@@ -155,8 +158,7 @@ export default function NepalMarketMap({ markets, selectedMarketId, locale }: Pr
     : 130
 
   function navigate(m: MarketMapData) {
-    const href = m.id === selectedMarketId ? `/${locale}` : `/${locale}?marketId=${m.id}`
-    router.push(href)
+    router.push(`/${locale}/chart?marketId=${m.id}`)
   }
 
   return (
@@ -310,6 +312,7 @@ export default function NepalMarketMap({ markets, selectedMarketId, locale }: Pr
               {hoveredMarket.isStale && (
                 <p className="text-amber-400 mt-1">⚠ {ui.unavailable}</p>
               )}
+              <p className="text-zinc-600 text-[9px] mt-1.5">{ui.clickHint}</p>
             </div>
           )}
 
