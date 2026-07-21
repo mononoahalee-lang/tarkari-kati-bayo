@@ -6,6 +6,23 @@ const createId = () => randomUUID().replace(/-/g, '')
 const KALIMATI_URL = 'https://kalimatimarket.gov.np/price'
 const KALIMATI_MARKET_EN = 'Kalimati'
 
+// Maps Kalimati-specific nameNe (after space normalization) to canonical AMPIS nameNe.
+// Kalimati uses variant spellings or different structures for vegetables that AMPIS tracks
+// under a standardized name. Without this map, each scrape would re-create duplicate records.
+const KALIMATI_CANONICAL: Record<string, string> = {
+  // Tomatoes: Kalimati spells गोलभेडा; AMPIS uses standard गोलभेंडा + space before (
+  'गोलभेडा सानो(लोकल)':     'गोलभेंडा सानो (लोकल)',
+  'गोलभेडा ठूलो(नेपाली)':   'गोलभेंडा ठुलो (नेपाली)',
+  'गोलभेडा ठूलो(भारतीय)':   'गोलभेंडा ठुलो (भारतीय)',
+  'गोलभेडा सानो(टनेल)':     'गोलभेंडा सानो (टनेल)',
+  // Cauliflower local: Kalimati uses "स्थानिय" without parens; AMPIS uses "(स्थानीय)"
+  'काउली स्थानिय':          'काउली (स्थानीय)',
+  // Carrot local: Kalimati spells गाजर; AMPIS uses गाँजर with anusvara
+  'गाजर(लोकल)':             'गाँजर (लोकल)',
+  // White radish hybrid: Kalimati reverses word order and spells हाइब्रीड differently
+  'सेतो मूला(हाइब्रीड)':    'मूला सेतो (हाइब्रिड)',
+}
+
 function parseNepaliPrice(text: string): number {
   const cleaned = text
     .replace(/रू\s*/g, '')
@@ -78,9 +95,11 @@ export async function scrapeKalimati(targetDate?: Date): Promise<number> {
     return 0
   }
 
-  // Normalize nameNe: remove spaces before parentheses to avoid duplicate records
-  // when Kalimati website toggles between "बन्दा(लोकल)" and "बन्दा (लोकल)"
-  const normalizeNe = (s: string) => s.replace(/\s+\(/g, '(').trim()
+  // Normalize nameNe: remove spaces before ( then apply canonical name mapping
+  const normalizeNe = (s: string) => {
+    const noSpaceParen = s.replace(/\s+\(/g, '(').trim()
+    return KALIMATI_CANONICAL[noSpaceParen] ?? noSpaceParen
+  }
   rows = rows.map((r) => ({ ...r, nameNe: normalizeNe(r.nameNe) }))
 
   // Batch: look up all existing vegetables in one query (also try with-space variants)
