@@ -59,15 +59,14 @@ export async function GET(
     }
   }
 
-  // In "All Markets" mode, a day where only one market reported isn't actually an
-  // average — it's that single market's price standing in for the whole country.
-  // For thinly-reported vegetables this creates sharp single-day spikes/dips that
-  // look like real price moves but are really just which market happened to post
-  // that day. Drop those days from the combined line (per-market view is unaffected
-  // since count is always 1 there by definition).
+  // In "All Markets" mode, prefer days where 2+ markets reported (removes single-market
+  // noise spikes). But if the vegetable is only tracked by one market, that filter would
+  // remove all data — so fall back to unfiltered when the filtered set is empty.
+  const allEntries = Array.from(dateMap.entries())
+  const multiMarketEntries = allEntries.filter(([, d]) => d.count >= 2)
   const entries = marketId
-    ? Array.from(dateMap.entries())
-    : Array.from(dateMap.entries()).filter(([, d]) => d.count >= 2)
+    ? allEntries
+    : (multiMarketEntries.length > 0 ? multiMarketEntries : allEntries)
 
   const sorted = entries.sort(([a], [b]) => a.localeCompare(b))
 
