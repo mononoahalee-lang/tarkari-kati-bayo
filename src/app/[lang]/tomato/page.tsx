@@ -165,6 +165,7 @@ const UI = {
     statsVarieties: 'Varieties tracked',
     statsMarkets: 'Markets',
     statsAvg: 'Avg price today',
+    statsAvgNote: 'Average of latest price per variety across all markets',
     indiaNepali: 'India 🇮🇳 vs Nepal 🇳🇵',
     indiaLabel: 'Indian tomatoes',
     nepaliLabel: 'Nepali / Local tomatoes',
@@ -173,8 +174,8 @@ const UI = {
     vs: 'vs',
     matrixTitle: 'Live Prices by Market',
     matrixNote: '(last 3 days · — = not traded here)',
-    chartTitle: 'Price Trend (90 days)',
-    chartNote: 'Varieties available in 2+ markets only',
+    chartTitle: 'Price Trend',
+    chartNote: 'Daily average across all reporting markets',
     stale: 'Data stopped',
     markets: 'markets',
     change7d: '7d change',
@@ -186,6 +187,7 @@ const UI = {
     statsVarieties: '品種数',
     statsMarkets: '市場数',
     statsAvg: '本日の平均価格',
+    statsAvgNote: '全市場の品種別最新価格の平均値',
     indiaNepali: 'インド産 🇮🇳 vs ネパール産 🇳🇵',
     indiaLabel: 'インド産トマト',
     nepaliLabel: 'ネパール・地元産トマト',
@@ -194,8 +196,8 @@ const UI = {
     vs: 'と比較して',
     matrixTitle: '市場別ライブ価格',
     matrixNote: '（直近3日間 · — = 取り扱いなし）',
-    chartTitle: '価格推移（90日間）',
-    chartNote: '複数市場データのある品種のみ表示',
+    chartTitle: '価格推移',
+    chartNote: '各日の全市場平均価格（複数市場報告分）',
     stale: 'データ停止',
     markets: '市場',
     change7d: '7日変化',
@@ -207,6 +209,7 @@ const UI = {
     statsVarieties: 'किसिमहरू',
     statsMarkets: 'बजारहरू',
     statsAvg: 'आजको औसत मूल्य',
+    statsAvgNote: 'सबै बजारको किसिमगत औसत मूल्य',
     indiaNepali: 'भारत 🇮🇳 vs नेपाल 🇳🇵',
     indiaLabel: 'भारतीय टमाटर',
     nepaliLabel: 'नेपाली / स्थानीय टमाटर',
@@ -215,8 +218,8 @@ const UI = {
     vs: 'भन्दा',
     matrixTitle: 'बजारअनुसार ताजा मूल्य',
     matrixNote: '(अन्तिम ३ दिन · — = व्यापार छैन)',
-    chartTitle: 'मूल्य प्रवृत्ति (९० दिन)',
-    chartNote: '२+ बजारमा भएका किसिमहरू मात्र',
+    chartTitle: 'मूल्य प्रवृत्ति',
+    chartNote: 'सबै बजारको दैनिक औसत (बहु-बजार दिन मात्र)',
     stale: 'डेटा रोकियो',
     markets: 'बजार',
     change7d: '७ दिन परिवर्तन',
@@ -266,13 +269,13 @@ export default async function TomatoPage({ params }: { params: Promise<{ lang: s
   const localAvg  = originRows.find((r) => r.origin === 'local')?.avg  ?? null
   const diffPct = indianAvg && localAvg ? ((indianAvg - localAvg) / localAvg) * 100 : null
 
-  // Chart series (90-day multi-market history)
-  const since90 = new Date(Date.now() - 90 * 86400000)
+  // Chart series (3-year multi-market history — client filters to chosen period)
+  const since1095 = new Date(Date.now() - 1095 * 86400000)
   const histRows = await prisma.$queryRaw<Array<{ vegetableId: string; date: string; avgPrice: number }>>`
     SELECT p."vegetableId", p.date::text AS date, AVG(p."avgPrice")::float AS "avgPrice"
     FROM "PriceRecord" p
     WHERE p."vegetableId" = ANY(${ids}::text[])
-      AND p.date >= ${since90}
+      AND p.date >= ${since1095}
     GROUP BY p."vegetableId", p.date
     HAVING COUNT(DISTINCT p."marketId") >= 2
     ORDER BY p."vegetableId", p.date ASC
@@ -349,6 +352,7 @@ export default async function TomatoPage({ params }: { params: Promise<{ lang: s
                 <div className="rounded-xl bg-red-900/50 border border-red-700/40 px-4 py-2 text-center">
                   <p className="text-2xl font-bold text-white font-mono">NPR {avgToday.toFixed(0)}</p>
                   <p className="text-[11px] text-red-200/60">{ui.statsAvg}</p>
+                  <p className="text-[10px] text-red-300/40 mt-0.5 max-w-[160px] leading-tight">{ui.statsAvgNote}</p>
                 </div>
               )}
             </div>

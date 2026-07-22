@@ -18,9 +18,9 @@ interface Props {
 }
 
 const UI = {
-  en: { title: 'Price Trend Comparison', toggle: 'Toggle varieties', noData: 'No multi-market data for this variety', period1M: '1M', period3M: '3M', priceLabel: 'NPR/kg' },
-  ja: { title: '品種別価格推移', toggle: '品種を選択', noData: '複数市場データなし', period1M: '1ヶ月', period3M: '3ヶ月', priceLabel: 'NPR/kg' },
-  ne: { title: 'मूल्य प्रवृत्ति तुलना', toggle: 'किसिम छान्नुहोस्', noData: 'बहु-बजार डेटा छैन', period1M: '१ म', period3M: '३ म', priceLabel: 'NPR/kg' },
+  en: { title: 'Price Trend Comparison', toggle: 'Toggle varieties', noData: 'No multi-market data for this variety', period1M: '1M', period3M: '3M', period1Y: '1Y', period3Y: '3Y', priceLabel: 'NPR/kg' },
+  ja: { title: '品種別価格推移', toggle: '品種を選択', noData: '複数市場データなし', period1M: '1ヶ月', period3M: '3ヶ月', period1Y: '1年', period3Y: '3年', priceLabel: 'NPR/kg' },
+  ne: { title: 'मूल्य प्रवृत्ति तुलना', toggle: 'किसिम छान्नुहोस्', noData: 'बहु-बजार डेटा छैन', period1M: '१ म', period3M: '३ म', period1Y: '१ व', period3Y: '३ व', priceLabel: 'NPR/kg' },
 }
 
 function buildPath(
@@ -55,26 +55,40 @@ function buildAreaPath(
   return `${line} L ${lastX.toFixed(1)},${h} L ${firstX.toFixed(1)},${h} Z`
 }
 
-function monthTicks(dateRange: [number, number], w: number): Array<{ x: number; label: string }> {
+function timeTicks(dateRange: [number, number], w: number, days: number): Array<{ x: number; label: string }> {
   const [d0, d1] = dateRange
   const ticks: Array<{ x: number; label: string }> = []
   const start = new Date(d0)
   start.setDate(1)
-  start.setMonth(start.getMonth() + 1)
+  // For 1Y+: show quarterly ticks labelled "Jan", "Apr"… + year when it changes
+  // For <1Y: show monthly ticks
+  const step = days >= 365 ? 3 : 1
+  start.setMonth(start.getMonth() + step)
+  let prevYear = -1
   while (start.getTime() <= d1) {
     const x = ((start.getTime() - d0) / (d1 - d0)) * w
-    ticks.push({ x, label: `${start.getMonth() + 1}月` })
-    start.setMonth(start.getMonth() + 1)
+    const yr = start.getFullYear()
+    const mo = start.getMonth() + 1
+    const label = days >= 365
+      ? (yr !== prevYear ? `${yr}` : `${mo}月`)
+      : `${mo}月`
+    ticks.push({ x, label })
+    prevYear = yr
+    start.setMonth(start.getMonth() + step)
   }
   return ticks
+}
+
+const PERIOD_DAYS_TOMATO: Record<'1M' | '3M' | '1Y' | '3Y', number> = {
+  '1M': 30, '3M': 90, '1Y': 365, '3Y': 1095,
 }
 
 export default function TomatoCharts({ series, locale }: Props) {
   const ui = UI[locale]
   const [active, setActive] = useState<Set<string>>(() => new Set(series.map((s) => s.id)))
-  const [period, setPeriod] = useState<'1M' | '3M'>('3M')
+  const [period, setPeriod] = useState<'1M' | '3M' | '1Y' | '3Y'>('1Y')
 
-  const cutoffDays = period === '1M' ? 30 : 90
+  const cutoffDays = PERIOD_DAYS_TOMATO[period]
   const cutoff = Date.now() - cutoffDays * 86400000
 
   const filteredSeries = useMemo(
@@ -97,7 +111,7 @@ export default function TomatoCharts({ series, locale }: Props) {
 
   const W = 760
   const H = 180
-  const ticks = monthTicks(dateRange, W)
+  const ticks = timeTicks(dateRange, W, cutoffDays)
 
   // Price gridlines
   const pStep = Math.ceil((priceRange[1] - priceRange[0]) / 4 / 10) * 10
@@ -118,13 +132,13 @@ export default function TomatoCharts({ series, locale }: Props) {
       {/* Period + legend */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex gap-1">
-          {(['1M', '3M'] as const).map((p) => (
+          {(['1M', '3M', '1Y', '3Y'] as const).map((p) => (
             <button
               key={p}
               onClick={() => setPeriod(p)}
               className={`px-3 py-1 rounded text-xs font-semibold transition-colors ${period === p ? 'bg-red-700 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'}`}
             >
-              {p === '1M' ? ui.period1M : ui.period3M}
+              {p === '1M' ? ui.period1M : p === '3M' ? ui.period3M : p === '1Y' ? ui.period1Y : ui.period3Y}
             </button>
           ))}
         </div>
