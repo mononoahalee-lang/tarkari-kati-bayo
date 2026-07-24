@@ -75,6 +75,28 @@ model ScrapeLog {
   @@index([source, runAt(sort: Desc)])
 }
 
+model SeedVariety {
+  id                 String    @id @default(cuid())
+  sqccId             Int       @unique
+  name               String
+  nepName            String?
+  cropName           String
+  cropSlug           String
+  ownerType          String    // "private" | "narc" | "other" (SQCC's own classification)
+  narcVariety        Boolean   @default(false)
+  typeOpHybrid       String?   // "Hybrid" | "OP" | "Inbred Male" | "Inbred Female" | null
+  isRegistered       Boolean   @default(false)
+  releasedDate       DateTime? @db.Date
+  releasedFiscalYear Int?
+  recommendedAreas   String?
+  slug               String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@index([cropSlug])
+  @@index([ownerType])
+}
+
 model FieldObservation {
   id            String    @id @default(cuid())
   date          DateTime  @db.Date

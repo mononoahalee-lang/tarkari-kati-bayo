@@ -59,6 +59,9 @@ export default async function LangLayout({
               <Link href={`/${locale}/tomato`} className="hidden sm:block text-zinc-200 hover:text-white transition-colors px-1" title={locale === 'ja' ? 'トマト分析' : locale === 'ne' ? 'टमाटर' : 'Tomato Research'}>
                 🍅
               </Link>
+              <Link href={`/${locale}/seed-registry`} className="hidden sm:block text-zinc-200 hover:text-white transition-colors px-1" title={locale === 'ja' ? '種子品種登録' : locale === 'ne' ? 'बीउ किसिम दर्ता' : 'Seed Variety Register'}>
+                🌾
+              </Link>
               <Link href={`/${locale}/news`} className="hidden sm:block text-zinc-200 hover:text-white transition-colors px-1">
                 {dict.nav.news}
               </Link>
@@ -109,6 +112,10 @@ export default async function LangLayout({
           <Link href={`/${locale}/tomato`} className="flex flex-col items-center gap-0.5 text-zinc-400 hover:text-white transition-colors px-2 py-1">
             <span className="text-lg leading-none">🍅</span>
             <span className="text-[10px]">{locale === 'ja' ? 'トマト' : locale === 'ne' ? 'टमाटर' : 'Tomato'}</span>
+          </Link>
+          <Link href={`/${locale}/seed-registry`} className="flex flex-col items-center gap-0.5 text-zinc-400 hover:text-white transition-colors px-2 py-1">
+            <span className="text-lg leading-none">🌾</span>
+            <span className="text-[10px]">{locale === 'ja' ? '種子' : locale === 'ne' ? 'बीउ' : 'Seeds'}</span>
           </Link>
         </nav>
       </body>
