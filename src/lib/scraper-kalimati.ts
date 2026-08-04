@@ -21,6 +21,10 @@ const KALIMATI_CANONICAL: Record<string, string> = {
   'गाजर(लोकल)':             'गाँजर (लोकल)',
   // White radish hybrid: Kalimati reverses word order and spells हाइब्रीड differently
   'सेतो मूला(हाइब्रीड)':    'मूला सेतो (हाइब्रिड)',
+  // Barela: Kalimati website lists this in English; AMPIS tracks it as बरेला
+  'Barela':                  'बरेला',
+  // Fenugreek Leaf: Kalimati English name; canonical AMPIS nameNe is मेथीको साग
+  'Fenugreek Leaf':          'मेथीको साग',
 }
 
 function parseNepaliPrice(text: string): number {
