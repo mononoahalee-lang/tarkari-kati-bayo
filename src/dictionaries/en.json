@@ -48,5 +48,11 @@
     "max": "Max",
     "avg": "Avg",
     "change": "7D Chg"
+  },
+  "survey": {
+    "title": "Field Survey",
+    "description": "Tap below to open the survey form.",
+    "openForm": "Open Survey Form",
+    "notReady": "The survey form link is not configured yet. Please contact the project administrator."
   }
 }

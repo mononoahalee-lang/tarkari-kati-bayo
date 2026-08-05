@@ -81,4 +81,10 @@ export interface Dictionary {
     avg: string
     change: string
   }
+  survey: {
+    title: string
+    description: string
+    openForm: string
+    notReady: string
+  }
 }
